@@ -1,0 +1,3 @@
+Conda 4.6 changed some commands.
+Setup files from the vipergpt git don't work with the new ones.
+Maybe downgrade conda to what was used at the time of their last update?
