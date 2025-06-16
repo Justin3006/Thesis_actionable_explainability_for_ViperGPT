@@ -16,5 +16,5 @@ Score is calculated from different metrics like expected memory usage, expected 
 TODO:
 - Literature Review for actionable explainability methods applicable to ViperGPT
 - Choose method to calculate score for this approach
-- Implement and test approach
+- Implement and test approach (modeled after AdaCoder's test structure)
 - Analyse and compare results to base-ViperGPT and the AdaCoder extension
