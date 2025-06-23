@@ -1,3 +1,8 @@
 Conda 4.6 changed some commands.
-Setup files from the vipergpt git don't work with the new ones.
-Maybe downgrade conda to what was used at the time of their last update?
+Setup files from the vipergpt git don't entirely work with the new ones.
+=> Manually went through setup steps
+
+TCL_M4 moved to different address, now only available in archive with different models. 
+=> Use this call:   
+gdown "https://drive.google.com/uc?id=1eHinvFP7TnZYAL2Ft-M8rPott7mpVN2R" -O TCL.zip
+then unzip TCL.zip
