@@ -1,3 +1,32 @@
+from typing import Dict, List
+
+def gather_modules(code:str, exemptions:List[str]) -> List[str]:
+    modules = []
+    lines = code.split('\n')
+    
+    for line in lines:
+        if line.strip().startswith('def '):
+            start = line.find('def ') + 4
+            end = line.find('(')
+            name = line[start:end]
+            if name not in exemptions:
+                modules.append(line[start:end])
+    return modules
+
+
+def identify_used_modules(code:str, modules:List[str]) -> Dict[str, int]:
+    used_modules = {}
+    lines = code.split('\n')
+    
+    for line in lines:
+        for module in modules:
+            if line.find(f'{module}(') != -1:
+                if module in used_modules.keys():
+                    used_modules[module] += 1
+                else: 
+                    used_modules[module] = 1 
+    return used_modules
+
 
 def count_leading_whitespace(text:str) -> int:
     count = 0
@@ -19,13 +48,13 @@ def remove_function_definition(code: str, function_name: str) -> str:
     # Flag to indicate whether we are inside Methods documentation
     inside_methods = False
     inside_definition = False
-    ident = 0
+    reference_ident = 0
 
     for line in lines:
         # Check if the line contains the methods string
         if line.strip().startswith('Methods'):
             inside_methods = True
-            ident = count_leading_whitespace(line)
+            reference_ident = count_leading_whitespace(line)
         
         # Check if the line contains a definition to remove
         if inside_methods:
@@ -33,7 +62,7 @@ def remove_function_definition(code: str, function_name: str) -> str:
                 inside_definition = True
                 continue
             if inside_definition:
-                if count_leading_whitespace(line) > ident:
+                if count_leading_whitespace(line) > reference_ident:
                     continue
                 else:
                     inside_definition = False
@@ -43,13 +72,15 @@ def remove_function_definition(code: str, function_name: str) -> str:
         # Check if the line contains the function definition we want to remove
         if line.strip().startswith(f'def {function_name}'):
             inside_function = True
+            reference_ident = count_leading_whitespace(line)
             continue
         # If we are inside the function, skip adding the line to the updated code
         if inside_function:
-            if line.strip().startswith('return'):
+            if count_leading_whitespace(line) <= reference_ident and len(line.strip()) > 0:
                 # If we encounter an empty line, we might have reached the end of the function
                 inside_function = False
-            continue
+            else:
+                continue
         # Add the line to the updated code
         updated_lines.append(line)
 
@@ -58,7 +89,7 @@ def remove_function_definition(code: str, function_name: str) -> str:
 
 
 # Example usage:
-code = '''
+input_code = '''
 class ImagePatch:
     """A Python class containing a crop of an image centered around a particular object, as well as relevant information.
     Attributes
@@ -151,8 +182,19 @@ class ImagePatch:
 # Examples of how to use the API
 # INSERT_QUERY_HERE
 def execute_command(INSERT_TYPE_HERE):
+    example = image_patch.find('stuff')
+    returns example
     '''
+    
+result_code = '''def execute_command(INSERT_TYPE_HERE):
+    example = image_patch.find('stuff')
+    returns example'''
 
-function_name = "exists"
-updated_code = remove_function_definition(code, function_name)
+modules = gather_modules(input_code, ['__init__', 'execute_command'])
+print(modules)
+used_modules = identify_used_modules(result_code, modules)
+print(used_modules)
+
+function_name = "find"
+updated_code = remove_function_definition(input_code, function_name)
 print(updated_code)

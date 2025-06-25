@@ -8,3 +8,6 @@ gdown "https://drive.google.com/uc?id=1eHinvFP7TnZYAL2Ft-M8rPott7mpVN2R" -O TCL.
 then unzip TCL.zip
 
 exist-methods need to be rewritten in prompts, as they refer to each other.
+
+What about the examples? For the individual benchmarks, they added examples to the pre-prompt, which contain the removed modules.
+Maybe just ignore for now and see how it goes?
