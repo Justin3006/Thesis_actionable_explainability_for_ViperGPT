@@ -22,8 +22,8 @@ load_models:                                        # Which pretrained models to
     blip: True
     saliency: False
     xvlm: True
-    codex: True
-    codellama: False
+    codex: False
+    codellama: True
 
 detect_thresholds:                                  # Thresholds for the models that perform detection
     glip: 0.5
@@ -48,11 +48,12 @@ gpt3:                                               # GPT-3 configuration
     model: text-davinci-003                         # See openai.Model.list() for available models
 
 codex:
+    model: codellama
+    codellama_model_name: /pfss/mlde/workspaces/mlde_wsp_PI_Mezini/ya50pabo/models/manifests/registry.ollama.ai/library/codellama/latest
     temperature: 0.                                 # Temperature for Codex. (Almost) deterministic if 0
     best_of: 1                                      # Number of tries to choose from. Use when temperature > 0
     max_tokens: 512                                 # Maximum number of tokens to generate for Codex
     prompt: ./prompts/chatapi.prompt                # Codex prompt file, which defines the API. (doesn't support video for now due to token limits)
-    model: gpt-3.5-turbo                            # Codex model to use. [code-davinci-002, gpt-3.5-turbo, gpt-4]. See openai.Model.list() for available models
 
 # Saving and loading parameters
 save: True                                          # Save the results to a file
