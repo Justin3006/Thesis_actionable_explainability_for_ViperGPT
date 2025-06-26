@@ -88,6 +88,36 @@ def remove_function_definition(code: str, function_name: str) -> str:
     return '\n'.join(updated_lines)
 
 
+def remove_function_examples(code:str, function_name:str, execute_command:str) -> str:
+    lines = code.split('\n')
+    updated_lines = []
+
+    example_start_ind = -1
+    example_ident = -1
+    function_found = False
+    
+    for ind, line in enumerate(lines):
+        if example_start_ind != -1:
+            if line.find(f'{function_name}('):
+                function_found = True
+    
+            if count_leading_whitespace(line) <= example_ident:
+                if function_found:
+                    while len(updated_lines) >= example_start_ind:
+                        updated_lines.pop()
+                example_start_ind = -1
+                example_ident = -1
+                function_found = False
+                
+        updated_lines.append(line)
+
+        if line.find(f'def {execute_command}') != -1:
+            example_start_ind = ind
+            example_ident = count_leading_whitespace(line)
+
+    return '\n'.join(updated_lines)
+
+
 # Example usage:
 input_code = '''
 class ImagePatch:
@@ -186,9 +216,13 @@ def execute_command(INSERT_TYPE_HERE):
     returns example
     '''
     
-result_code = '''def execute_command(INSERT_TYPE_HERE):
+result_code = '''# Some stuff here
+# Example query here
+def execute_command(INSERT_TYPE_HERE):
     example = image_patch.find('stuff')
-    returns example'''
+    returns example
+    
+# Some more stuff here'''
 
 modules = gather_modules(input_code, ['__init__', 'execute_command'])
 print(modules)
@@ -197,4 +231,7 @@ print(used_modules)
 
 function_name = "find"
 updated_code = remove_function_definition(input_code, function_name)
+print(updated_code)
+
+updated_code = remove_function_examples(result_code, function_name, 'execute_command')
 print(updated_code)
