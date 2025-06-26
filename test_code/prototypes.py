@@ -20,7 +20,7 @@ def identify_used_modules(code:str, modules:List[str]) -> Dict[str, int]:
     
     for line in lines:
         for module in modules:
-            if line.find(f'{module}(') != -1:
+            if line.find(f' {module}(') != -1 or line.find(f'.{module}(') != -1:
                 if module in used_modules.keys():
                     used_modules[module] += 1
                 else: 
@@ -70,7 +70,7 @@ def remove_function_definition(code: str, function_name: str) -> str:
                 inside_methods = False
 
         # Check if the line contains the function definition we want to remove
-        if line.strip().startswith(f'def {function_name}'):
+        if line.strip().startswith(f'def {function_name}('):
             inside_function = True
             reference_ident = count_leading_whitespace(line)
             continue
@@ -98,7 +98,7 @@ def remove_function_examples(code:str, function_name:str, execute_command:str) -
     
     for ind, line in enumerate(lines):
         if example_start_ind != -1:
-            if line.find(f'{function_name}('):
+            if line.find(f'.{function_name}(') != -1 or line.find(f' {function_name}(') != -1:
                 function_found = True
     
             if count_leading_whitespace(line) <= example_ident:
@@ -209,6 +209,9 @@ class ImagePatch:
         """
         return len(find_in_image(self.cropped_image, object_name)) > 0
 
+def combine():
+    return 0
+        
 # Examples of how to use the API
 # INSERT_QUERY_HERE
 def execute_command(INSERT_TYPE_HERE):
@@ -226,10 +229,11 @@ def execute_command(INSERT_TYPE_HERE):
 
 modules = gather_modules(input_code, ['__init__', 'execute_command'])
 print(modules)
+
 used_modules = identify_used_modules(result_code, modules)
 print(used_modules)
 
-function_name = "find"
+function_name = "combine"
 updated_code = remove_function_definition(input_code, function_name)
 print(updated_code)
 
