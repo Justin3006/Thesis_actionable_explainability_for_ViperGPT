@@ -1020,7 +1020,7 @@ class CodexModel(BaseModel):
             with open(config.fixed_code_file) as f:
                 self.fixed_code = f.read()
 
-    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None):
+    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[]):
         if config.use_fixed_code:  # Use the same program for every sample, like in socratic models
             return [self.fixed_code] * len(prompt) if isinstance(prompt, list) else self.fixed_code
 
@@ -1029,6 +1029,13 @@ class CodexModel(BaseModel):
                 base_prompt = f.read().strip()
         elif base_prompt is None:
             base_prompt = self.base_prompt
+                       
+        import prompt_editing
+        all_modules = prompt_editing.gather_modules(base_prompt, ['__init__', 'execute_command']) # add to return
+        module_list_out.extend(all_modules)
+        for module in supressed_modules:
+            base_prompt = prompt_editing.remove_function_definitions(base_prompt, module)
+            base_prompt = prompt_editing.remove_function_examples(base_prompt, module, 'execute_command')
 
         if isinstance(prompt, list):
             extended_prompt = [base_prompt.replace("INSERT_QUERY_HERE", p).

@@ -252,11 +252,11 @@ def load_image(path):
     return image
 
 
-def get_code(query):
+def get_code(query,supressed_modules=[],module_list_out=[]):
     model_name_codex = 'codellama' if config.codex.model == 'codellama' else 'codex'
-    code = forward(model_name_codex, prompt=query, input_type="image")
+    code = forward(model_name_codex, prompt=query, input_type="image", supressed_modules=supressed_modules, module_list_out=module_list_out)
     if config.codex.model not in ('gpt-3.5-turbo', 'gpt-4'):
-        code = f'def execute_command(image, my_fig, time_wait_between_lines, syntax):' + code # chat models give execute_command due to system behaviour
+        code = f'def execute_command(image, my_fig, time_wait_between_lines, syntax):' + code  # chat models give execute_command due to system behaviour
     code_for_syntax = code.replace("(image, my_fig, time_wait_between_lines, syntax)", "(image)")
     syntax_1 = Syntax(code_for_syntax, "python", theme="monokai", line_numbers=True, start_line=0)
     console.print(syntax_1)
