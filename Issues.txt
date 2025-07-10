@@ -7,7 +7,44 @@ TCL_M4 moved to different address, now only available in archive with different 
 gdown "https://drive.google.com/uc?id=1eHinvFP7TnZYAL2Ft-M8rPott7mpVN2R" -O TCL.zip
 then unzip TCL.zip
 
+Issues with importing BLIP-2 from transformers 
+=> pip install transformers==4.27.0
+
+In vision models, blip imports don't work.
+=> Change to this:
+from transformers.models.blip_2.processing_blip_2 import Blip2Processor 
+from transformers.models.blip_2.modeling_blip_2 import Blip2ForConditionalGeneration
+
+In torchvision add NEAREST_EXACT = "nearest" to InterpolationMode in transforms.functional.py
+
+In transformers.models.blip_2.modeling_blip2: from ...generation import GenerationMixin => from ...generation.utils import GenerationMixin
+
 exist-methods need to be rewritten in prompts, as they refer to each other.
 
 What about the examples? For the individual benchmarks, they added examples to the pre-prompt, which contain the removed modules.
 Maybe just ignore for now and see how it goes?
+
+export TORCH_HOME='/pfss/mlde/workspaces/mlde_wsp_PI_Mezini/jl17wali/TORCH_HOME'
+
+
+upgrade protobuff, copy builder, downgrade to 3.19.6, paste builder 
+
+
+
+
+
+
+
+
+
+
+Alternate: Use new torch versions + pip install -U accelerate + pip install -U bitsandbytes + pip install -U inflect
+In vision models, blip imports don't work.
+=> Change to this:
+from transformers.models.blip_2.processing_blip_2 import Blip2Processor 
+from transformers.models.blip_2.modeling_blip_2 import Blip2ForConditionalGeneration
+In transformers.models.blip_2.modeling_blip2: from ...generation import GenerationMixin => from ...generation.utils import GenerationMixin
+from transformers.models.code_llama.tokenization_code_llama import CodeLlamaTokenizer
+In vision_models: from transformers.models.llama.modeling_llama import LlamaForCausalLM 
+In gqa.py: add ', **kwargs' to init params
+copy the maskrcnn from GLIP folder to viper folder
