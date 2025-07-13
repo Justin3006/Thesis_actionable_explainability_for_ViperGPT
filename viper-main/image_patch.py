@@ -429,9 +429,9 @@ def llm_query(query, context=None, long_answer=True, queues=None):
         the text question to ask. Must not contain any reference to 'the image' or 'the photo', etc.
     """
     if long_answer:
-        return forward(model_name='gpt3_general', prompt=query, queues=queues)
+        return forward(model_name='llama_general', prompt=query, queues=queues)
     else:
-        return forward(model_name='gpt3_qa', prompt=[query, context], queues=queues)
+        return forward(model_name='llama_qa', prompt=[query, context], queues=queues)
 
 
 def process_guesses(prompt, guess1=None, guess2=None, queues=None):

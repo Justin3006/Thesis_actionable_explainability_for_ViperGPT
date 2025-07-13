@@ -1,3 +1,16 @@
+
+exist-methods need to be rewritten in prompts, as they refer to each other.
+
+What about the examples? For the individual benchmarks, they added examples to the pre-prompt, which contain the removed modules.
+Maybe just ignore for now and see how it goes?
+
+llm_query method uses gpt3 => either rewrite or change to llama; for now simply removed
+
+
+
+
+
+
 Conda 4.6 changed some commands.
 Setup files from the vipergpt git don't entirely work with the new ones.
 => Manually went through setup steps
@@ -19,19 +32,17 @@ In torchvision add NEAREST_EXACT = "nearest" to InterpolationMode in transforms.
 
 In transformers.models.blip_2.modeling_blip2: from ...generation import GenerationMixin => from ...generation.utils import GenerationMixin
 
-exist-methods need to be rewritten in prompts, as they refer to each other.
-
-What about the examples? For the individual benchmarks, they added examples to the pre-prompt, which contain the removed modules.
-Maybe just ignore for now and see how it goes?
-
 export TORCH_HOME='/pfss/mlde/workspaces/mlde_wsp_PI_Mezini/jl17wali/TORCH_HOME'
 
 
 upgrade protobuff, copy builder, downgrade to 3.19.6, paste builder 
 
 
+in /GLIP/maskrcnn_benchmark/csrc/cuda/: Change all 'AT_DISPATCH_FLOATING_TYPES({X}.type()' references to 'AT_DISPATCH_FLOATING_TYPES({X}.scalar_type()'
 
-
+import nltk
+nltk.download('punkt')
+nltk.download('averaged_perceptron_tagger')
 
 
 

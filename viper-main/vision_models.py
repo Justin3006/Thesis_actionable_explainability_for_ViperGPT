@@ -952,6 +952,121 @@ class GPT3Model(BaseModel):
         return ['gpt3_' + n for n in ['qa', 'guess', 'general']]
 
 
+class LlamaModel(BaseModel):
+    name = 'llama'
+    to_batch = False
+    requires_gpu = False
+
+    def __init__(self, gpu_number=0):
+        super().__init__(gpu_number=gpu_number)
+        with open(config.gpt3.qa_prompt) as f:
+            self.qa_prompt = f.read().strip()
+        with open(config.gpt3.guess_prompt) as f:
+            self.guess_prompt = f.read().strip()
+        
+        model_id = "meta-llama/Meta-Llama-3-8B"
+        import transformers
+        self.pipeline = transformers.pipeline("text-generation", model=model_id, model_kwargs={"torch_dtype": torch.bfloat16}, device_map="auto")
+
+    # initial cleaning for reference QA results
+    @staticmethod
+    def process_answer(answer):
+        answer = answer.lstrip()  # remove leading spaces (our addition)
+        answer = answer.replace('.', '').replace(',', '').lower()
+        to_be_removed = {'a', 'an', 'the', 'to', ''}
+        answer_list = answer.split(' ')
+        answer_list = [item for item in answer_list if item not in to_be_removed]
+        return ' '.join(answer_list)
+
+    @staticmethod
+    def get_union(lists):
+        return list(set(chain.from_iterable(lists)))
+
+    @staticmethod
+    def most_frequent(answers):
+        answer_counts = Counter(answers)
+        return answer_counts.most_common(1)[0][0]
+
+    def process_guesses(self, prompts):
+        prompt_base = self.guess_prompt
+        prompts_total = []
+        for p in prompts:
+            question, guess1, _ = p
+            if len(guess1) == 1:
+                # In case only one option is given as a guess
+                guess1 = [guess1[0], guess1[0]]
+            prompts_total.append(prompt_base.format(question, guess1[0], guess1[1]))
+        response = self.query_llama(prompts_total)
+        return response
+
+    def get_qa(self, prompts, prompt_base: str = None) -> list[str]:
+        if prompt_base is None:
+            prompt_base = self.qa_prompt
+        prompts_total = []
+        for p in prompts:
+            question = p
+            prompts_total.append(prompt_base.format(question))
+        response = self.query_llama(prompts_total)
+        return response
+
+    def get_general(self, prompts) -> list[str]:
+        response = self.query_llama(prompts, model=self.model, max_tokens=256, top_p=1, frequency_penalty=0,
+                                   presence_penalty=0)
+        return response
+
+    def query_llama(self, prompt):
+        response = self.pipeline(prompt)
+        return response
+
+    def forward(self, prompt, process_name):
+        if not self.to_batch:
+            prompt = [prompt]
+
+        if process_name == 'llama_qa':
+            # if items in prompt are tuples, then we assume it is a question and context
+            if isinstance(prompt[0], tuple) or isinstance(prompt[0], list):
+                prompt = [question.format(context) for question, context in prompt]
+
+        to_compute = None
+        results = []
+        # Check if in cache
+        if config.use_cache:
+            for p in prompt:
+                # This is not ideal, because if not found, later it will have to re-hash the arguments.
+                # But I could not find a better way to do it.
+                result = gpt3_cache_aux(process_name, p, self.temperature, self.n_votes, None)
+                results.append(result)  # If in cache, will be actual result, otherwise None
+            to_compute = [i for i, r in enumerate(results) if r is None]
+            prompt = [prompt[i] for i in to_compute]
+
+        if len(prompt) > 0:
+            if process_name == 'llama_qa':
+                response = self.get_qa(prompt)
+            elif process_name == 'llama_guess':
+                response = self.process_guesses(prompt)
+            else:  # 'llama_general', general prompt, has to be given all of it
+                response = self.get_general(prompt)
+        else:
+            response = []  # All previously cached
+
+        if config.use_cache:
+            for p, r in zip(prompt, response):
+                # "call" forces the overwrite of the cache
+                gpt3_cache_aux.call(process_name, p, self.temperature, self.n_votes, r)
+            for i, idx in enumerate(to_compute):
+                results[idx] = response[i]
+        else:
+            results = response
+
+        if not self.to_batch:
+            results = results[0]
+        return results
+
+    @classmethod
+    def list_processes(cls):
+        return ['llama_' + n for n in ['qa', 'guess', 'general']]
+
+
 # @cache.cache
 @backoff.on_exception(backoff.expo, Exception, max_tries=10)
 def codex_helper(extended_prompt):
