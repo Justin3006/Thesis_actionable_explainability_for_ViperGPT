@@ -1,5 +1,6 @@
 import os
-
+from datasets import load_dataset
+import pandas as pd
 from PIL import Image
 import numpy as np
 from torch.utils.data import Dataset
@@ -24,9 +25,15 @@ class RefCOCODataset(Dataset):
         self.question_transforms = question_transforms
         self.tokenize = tokenize
         self.input_type = 'image'
-
+        
         assert version in ['refcoco', 'refcoco+', 'refcocog']
+        repo_id = 'RefCOCO' if version == 'refcoco' else 'RefCOCOplus'
 
+        self.dataset = load_dataset('lmms-lab/' + repo_id)[split]
+        if max_samples is not None:
+            self.dataset = self.samples[:max_samples]
+
+        """
         # load refs from data/dataset/refs(dataset).json
         ref_file = os.path.join(data_path, version, 'refs(' + split_by + ').p')
         with open(ref_file, 'rb') as f:
@@ -55,6 +62,7 @@ class RefCOCODataset(Dataset):
 
         if max_samples is not None:
             self.samples = self.samples[:max_samples]
+        """
 
     def create_index(self):
         # create sets of mapping
@@ -204,6 +212,12 @@ class RefCOCODataset(Dataset):
         return img_path
 
     def __getitem__(self, index):
+        item = self.dataset[index]
+        return {'query': item['question'], 'image':item['image'], 'sample_id':item['question_id'], 
+                'answer':item['answer'], 'index':index, 'possible_answers':[], 
+                'info_to_prompt':item['question'], 'query_type':-1, 'extra_content':''}
+
+        """
         ref_id, i = self.samples[index]
         ref = self.load_refs(ref_id)[0]
 
@@ -223,6 +237,7 @@ class RefCOCODataset(Dataset):
 
         return {'query': text, 'image': img, 'sample_id': index, 'answer': answer, 'index': index,
                 'possible_answers': [], 'info_to_prompt': text, "query_type": -1, 'extra_context': ''}
+        """            
 
     def __len__(self):
         return len(self.samples)
