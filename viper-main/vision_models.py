@@ -1135,7 +1135,7 @@ class CodexModel(BaseModel):
             with open(config.fixed_code_file) as f:
                 self.fixed_code = f.read()
 
-    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[]):
+    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[], auto_improve_target=''):
         if config.use_fixed_code:  # Use the same program for every sample, like in socratic models
             return [self.fixed_code] * len(prompt) if isinstance(prompt, list) else self.fixed_code
 
@@ -1144,9 +1144,9 @@ class CodexModel(BaseModel):
                 base_prompt = f.read().strip()
         elif base_prompt is None:
             base_prompt = self.base_prompt
-                       
+
         import prompt_editing
-        all_modules = prompt_editing.gather_modules(base_prompt, ['__init__', 'execute_command']) # add to return
+        all_modules = prompt_editing.gather_modules(base_prompt, ['__init__', 'execute_command'])
         module_list_out.extend(all_modules)
         for module in supressed_modules:
             base_prompt = prompt_editing.remove_function_definitions(base_prompt, module)
@@ -1167,7 +1167,40 @@ class CodexModel(BaseModel):
         result = self.forward_(extended_prompt)
         if not isinstance(prompt, list):
             result = result[0]
+        
+        #########################
+        ###   AUTO-IMPROVE
+        #########################
+        if auto_improve_target != '':
+            import explainer
+            for i in len(result):
+                code_0 = result[i]
+                used_modules = explainer.identify_used_modules(code_0, all_modules)
+                explanans_collection = {'': explainer.gather_explanans(code_0, all_modules, used_modules)}
+                
+                for module in used_modules.keys():
+                    reduced_modules = all_modules.copy()
+                    reduced_modules.remove(module)
+                    reduced_prompt = prompt_editing.remove_function_definitions(base_prompt, module)
+                    reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
 
+                    if isinstance(prompt, list):
+                        extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
+                                           replace('INSERT_TYPE_HERE', input_type).
+                                           replace('EXTRA_CONTEXT_HERE', extra_context[i])]
+                    elif isinstance(prompt, str):
+                        extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
+                                           replace('INSERT_TYPE_HERE', input_type).
+                                           replace('EXTRA_CONTEXT_HERE', extra_context)]
+                    
+                    code_m = self.forward_(extended_prompt)
+                    if not isinstance(prompt, list):
+                        code_m = code_m[0]
+                    explanans_collection[module] = explainer.gather_explanans(code_m, reduced_modules, used_modules)
+
+                summarized_explanans = explainer.summarize_explanans(explanans_collection)   
+                recommendation = explainer.get_recommendation(summarized_explanans, auto_improve_target)
+                result[i] = summarized_explanans['Alternate Code'][recommendation]
         return result
 
     def forward_(self, extended_prompt):

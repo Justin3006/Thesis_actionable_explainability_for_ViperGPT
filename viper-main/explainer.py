@@ -1,5 +1,6 @@
 from typing import Dict, List, Any, Tuple
 import main_simple_lib as viperGPT
+import numpy as np
 
 
 def identify_used_modules(code:str, modules:List[str]) -> Dict[str, int]:
@@ -84,12 +85,27 @@ def summarize_explanans(explanans_collection:Dict[str, Dict]) -> Dict[str, Any]:
     return summarized_explanans
 
 
-def get_code_with_explanations(query:str) -> Tuple[str, Dict[str, Any]]:
+def get_recommendation(summarized_explanans:Dict[str, Any], target:str) -> str:
+    """
+    Recommends which module to cut if any.
+    
+    :param summarized_explanans: Dictionary containing explanans for the code.
+    :param target: String indicating which property to optimize.
+    :returns: Name of the module recommendet to cut.
+    """
+    if target == 'Confidence':
+        least_confident = np.argmin(summarized_explanans[target])
+        return least_confident if summarized_explanans[target][least_confident] < 0.5 else ''
+    return ''
+
+
+def get_code_with_explanations(query:str, target:str) -> Tuple[str, Dict[str, Any]]:
     """
     Code generation variant that also generates explanations for the code.
     
     :param query: What query to generate code for.
-    :returns: Generated code, Dictionary containing explanans for the code.
+    :param target: What you want to optimize for.
+    :returns: Generated code, Dictionary containing explanans for the code, Module recommended to cut.
     """
     all_modules = []
     code_0 = viperGPT.get_code(query, module_list_out=all_modules)
@@ -104,4 +120,5 @@ def get_code_with_explanations(query:str) -> Tuple[str, Dict[str, Any]]:
         explanans_collection[module] = gather_explanans(code_m, reduced_modules, used_modules)
 
     summarized_explanans = summarize_explanans(explanans_collection)   
-    return code_0, summarized_explanans
+    recommendation = get_recommendation(summarized_explanans, target)
+    return code_0, summarized_explanans, recommendation
