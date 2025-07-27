@@ -1251,7 +1251,6 @@ class CodeLlama(CodexModel):
     def __init__(self, gpu_number=0):
         super().__init__(gpu_number=gpu_number)
 
-        from transformers import LlamaForCausalLM, CodeLlamaTokenizer
         from transformers.models.code_llama.tokenization_code_llama import CodeLlamaTokenizer
         from transformers.models.llama.modeling_llama import LlamaForCausalLM 
 
