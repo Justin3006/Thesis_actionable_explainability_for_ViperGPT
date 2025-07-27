@@ -1,6 +1,7 @@
 from typing import Dict, List, Any, Tuple
-import main_simple_lib as viperGPT
+#import main_simple_lib as viperGPT
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def identify_used_modules(code:str, modules:List[str]) -> Dict[str, int]:
@@ -99,6 +100,39 @@ def get_recommendation(summarized_explanans:Dict[str, Any], target:str) -> str:
     return ''
 
 
+def plot_explanations(summarized_explanations:Dict[str, Any]) -> None:
+    """
+    Plots the explanations.
+    
+    :param summarized_explanations: A python dictionary containing the summarized explanation.
+    """
+    # Sample data for heatmap
+    heatmap_data = np.random.rand(10, 12)
+    
+    # Sample data for bar plot
+    bar_data = summarized_explanations["Confidence"].values()
+    
+    # Create a figure and a set of subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+    
+    # Create heatmap
+    cax = ax1.imshow(heatmap_data, cmap='viridis')
+    fig.colorbar(cax, ax=ax1)
+    
+    # Create bar plot
+    ax2.bar(range(len(bar_data)), bar_data)
+    
+    # Add some labels for clarity
+    ax1.set_title('Heatmap')
+    ax2.set_title('Bar Plot')
+    
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+    
+    # Show the plot
+    plt.show()
+
+
 def get_code_with_explanations(query:str, target:str) -> Tuple[str, Dict[str, Any]]:
     """
     Code generation variant that also generates explanations for the code.
@@ -122,3 +156,5 @@ def get_code_with_explanations(query:str, target:str) -> Tuple[str, Dict[str, An
     summarized_explanans = summarize_explanans(explanans_collection)   
     recommendation = get_recommendation(summarized_explanans, target)
     return code_0, summarized_explanans, recommendation
+
+plot_explanations({"Confidence":{"module1":0.6,"module2":0.4}, "Time Impact":{"module1":0.6,"module2":0.4}})
