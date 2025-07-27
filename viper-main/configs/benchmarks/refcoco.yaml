@@ -14,6 +14,7 @@ results_dir: ./results/refcoco/
 
 load_models:
   gpt3_general: False
+  maskrcnn: True
 
 ratio_box_area_to_image_area: 0.03
 crop_larger_margin: False

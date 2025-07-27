@@ -1,5 +1,5 @@
 import os
-from datasets import load_dataset
+import datasets
 import pandas as pd
 from PIL import Image
 import numpy as np
@@ -29,7 +29,7 @@ class RefCOCODataset(Dataset):
         assert version in ['refcoco', 'refcoco+', 'refcocog']
         repo_id = 'RefCOCO' if version == 'refcoco' else 'RefCOCOplus'
 
-        self.dataset = load_dataset('lmms-lab/' + repo_id)[split]
+        self.dataset = datasets.load_dataset('lmms-lab/' + repo_id)[split]
         if max_samples is not None:
             self.dataset = self.samples[:max_samples]
 
@@ -199,7 +199,9 @@ class RefCOCODataset(Dataset):
     def get_index_from_sample_id(self, sample_id):
         return sample_id
 
-    def get_sample_path(self, index=None, ref=None):
+    def get_img_path(self, index=None, ref=None):
+        return None
+        """
         if ref is None:
             assert index is not None
             ref_id, i = self.samples[index]
@@ -210,12 +212,31 @@ class RefCOCODataset(Dataset):
 
         img_path = os.path.join(self.data_path, 'mscoco', coco_split, file_name)
         return img_path
+        """
 
     def __getitem__(self, index):
         item = self.dataset[index]
-        return {'query': item['question'], 'image':item['image'], 'sample_id':item['question_id'], 
-                'answer':item['answer'], 'index':index, 'possible_answers':[], 
-                'info_to_prompt':item['question'], 'query_type':-1, 'extra_content':''}
+        
+        bbox = item['bbox']
+        if bbox[0] > bbox[2]:
+            temp = bbox[0]
+            bbox[0] = bbox[2]
+            bbox[2] = temp
+        if bbox[1] > bbox[3]:
+            temp = bbox[1]
+            bbox[1] = bbox[3]
+            bbox[3] = temp
+            
+        pil_img = item['image'].convert("RGB")
+        if self.image_transforms:
+            img = self.image_transforms(pil_img)
+        else:
+            img = pil_img
+            
+        
+        return {'query': item['answer'][0], 'image':img, 'sample_id':item['question_id'], 
+                'answer':bbox, 'index':index, 'possible_answers':[], 
+                'info_to_prompt':item['answer'][0], 'query_type':-1, 'extra_context':''}
 
         """
         ref_id, i = self.samples[index]
@@ -240,7 +261,7 @@ class RefCOCODataset(Dataset):
         """            
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.dataset)
 
     @classmethod
     def accuracy(cls, prediction, ground_truth, *args):

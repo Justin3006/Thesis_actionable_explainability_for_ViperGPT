@@ -7,7 +7,8 @@ import pandas as pd
 from torch.utils.data import Dataset
 import numpy as np
 
-from datasets import general_postprocessing
+from dataset_helpers import general_postprocessing
+from huggingface_hub import hf_hub_download
 
 
 class GQADataset(Dataset):
@@ -18,7 +19,7 @@ class GQADataset(Dataset):
 
     def __init__(self, split, balanced=True, data_path="",
                  image_transforms=None, question_transforms=None, tokenize=None,
-                 verbose=False, testing=False, max_samples=None, first_n=None, return_pil=True):
+                 verbose=False, testing=False, max_samples=None, first_n=None, return_pil=True, **kwargs):
         """
         Args:
             split (str): Data split. One of ["challenge", "submission", "test", "testdev", "train", "val"]
@@ -199,14 +200,14 @@ class GQADataset(Dataset):
         if self.testing:
             if (sample_id is None) or (img is None) or (question is None):
                 raise Exception(f"Error in GQA Dataset: sample_id={sample_id}, img={img}, question={question}")
-            out_dict = {"sample_id": sample_id, "img": img, "question": question, 'index': index}
+            out_dict = {"sample_id": sample_id, "image": img, "query": question, 'index': index, "extra_context": ''}
             if self.return_pil:
                 out_dict["pil_img"] = pil_img
             return out_dict
         else:
-            out_dict = {"sample_id": sample_id, "answer": answer, "img": img, "question": question, 'pil_img': pil_img,
-                        "question_type": question_type, 'index': index, 'possible_answers': [],
-                        'info_to_prompt': question}
+            out_dict = {"sample_id": sample_id, "answer": answer, "image": img, "query": question, 'pil_img': pil_img,
+                        "query_type": question_type, 'index': index, 'possible_answers': [],
+                        'info_to_prompt': question, "extra_context": ''}
             return out_dict
 
     def post_process(self, prediction, stem=True):

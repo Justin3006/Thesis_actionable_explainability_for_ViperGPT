@@ -1,5 +1,5 @@
+[INST]
 import math
-
 
 class ImagePatch:
     """A Python class containing a crop of an image centered around a particular object, as well as relevant information.
@@ -175,7 +175,6 @@ class ImagePatch:
         """
         return self.left <= right and self.right >= left and self.lower <= upper and self.upper >= lower
 
-
 def best_image_match(list_patches: List[ImagePatch], content: List[str], return_index=False) -> Union[ImagePatch, int]:
     """Returns the patch most likely to contain the content.
     Parameters
@@ -192,7 +191,6 @@ def best_image_match(list_patches: List[ImagePatch], content: List[str], return_
         Patch most likely to contain the object
     """
     return best_image_match(list_patches, content, return_index)
-
 
 def distance(patch_a: ImagePatch, patch_b: ImagePatch) -> float:
     """
@@ -217,7 +215,6 @@ def distance(patch_a: ImagePatch, patch_b: ImagePatch) -> float:
     """
     return distance(patch_a, patch_b)
 
-
 # Examples of how to use the API
 
 # chair at the front
@@ -229,7 +226,6 @@ def execute_command(image) -> ImagePatch:
     chair_patch = chair_patches[0]
     # Remember: return the chair
     return chair_patch
-
 
 # black car just under stop sign
 def execute_command(image) -> ImagePatch:
@@ -249,7 +245,6 @@ def execute_command(image) -> ImagePatch:
     # Remember: return the car
     return car_under_stop[0]
 
-
 # middle kid
 def execute_command(image) -> ImagePatch:
     # Return the kid
@@ -260,7 +255,6 @@ def execute_command(image) -> ImagePatch:
     kid_patches.sort(key=lambda kid: kid.horizontal_center)
     # Remember: return the kid
     return kid_patches[len(kid_patches) // 2]  # Return the middle kid
-
 
 # girl in white next to man in left
 def execute_command(image) -> ImagePatch:
@@ -278,7 +272,6 @@ def execute_command(image) -> ImagePatch:
     # Remember: return the girl
     return girl_patch
 
-
 # cow facing the camera
 def execute_command(image) -> ImagePatch:
     # Return the cow
@@ -290,7 +283,6 @@ def execute_command(image) -> ImagePatch:
     # Remember: return the cow
     return cow_patch
 
-
 # back
 def execute_command(image) -> ImagePatch:
     # Return the person
@@ -300,7 +292,6 @@ def execute_command(image) -> ImagePatch:
     person_patch = person_patches[-1]
     # Remember: return the person
     return person_patch
-
 
 # dog to the left of the post who is closest to girl wearing a shirt with text that says "I love you"
 def execute_command(image) -> ImagePatch:
@@ -322,14 +313,12 @@ def execute_command(image) -> ImagePatch:
     # Remember: return the dog
     return dog_patch
 
-
 # more visible chair
 def execute_command(image) -> ImagePatch:
     # Return the chair
     image_patch = ImagePatch(image)
     # Remember: return the chair
     return image_patch.find("chair")[0]
-
 
 # top left
 def execute_command(image) -> ImagePatch:
@@ -349,7 +338,6 @@ def execute_command(image) -> ImagePatch:
     # Remember: return the person
     return person_leftmost
 
-
 # second to top flower
 def execute_command(image) -> ImagePatch:
     # Return the flower
@@ -359,7 +347,6 @@ def execute_command(image) -> ImagePatch:
     flower_patch = flower_patches[-2]
     # Remember: return the flower
     return flower_patch
-
 
 # chair to the right near the couch
 def execute_command(image)->ImagePatch:
@@ -380,7 +367,6 @@ def execute_command(image)->ImagePatch:
     # Remember: return the chair
     return chair_patch
 
-
 # number 17
 def execute_command(image) -> ImagePatch:
     # Return the person
@@ -391,7 +377,6 @@ def execute_command(image) -> ImagePatch:
             return patch
     # Remember: return the person
     return person_patches[0]
-
 
 # balloon on the right and second from the bottom
 def execute_command(image) -> ImagePatch:
@@ -412,7 +397,6 @@ def execute_command(image) -> ImagePatch:
     # Remember: return the balloon
     return balloon_patch
 
-
 # lamp on the bottom
 def execute_command(image) -> ImagePatch:
     # Return the lamp
@@ -421,7 +405,6 @@ def execute_command(image) -> ImagePatch:
     lamp_patches.sort(key=lambda lamp: lamp.vertical_center)
     # Remember: return the lamp
     return lamp_patches[0]  # Return the bottommost lamp
-
 
 # foo to bottom left
 def execute_command(image) -> ImagePatch:
@@ -439,7 +422,6 @@ def execute_command(image) -> ImagePatch:
     # Remember: return the foo
     return foo_patch
 
-
 # white and yellow pants
 def execute_command(image) -> ImagePatch:
     # Return the person
@@ -450,6 +432,13 @@ def execute_command(image) -> ImagePatch:
     # Remember: return the person
     return person_patch
 
+Write a function using Python and the ImagePatch class (above) that could be executed to find the bounding box of the desired object in an image.
 
-# INSERT_QUERY_HERE
-def execute_command(INSERT_TYPE_HERE):
+Consider the following guidelines:
+- Use base Python (comparison, sorting) for basic logical operations, left/right/up/down, math, etc.
+- Use only 'INSERT_TYPE_HERE' as a parameter to the function.
+- Put your code between [CODE] and [/CODE]
+- Do not return the instructions or API back.
+
+Query: Find the bounding box of INSERT_QUERY_HERE
+[/INST]

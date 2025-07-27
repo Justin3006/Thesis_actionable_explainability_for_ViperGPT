@@ -1,6 +1,6 @@
 multiprocessing: False                              # Run the models and samples in parallel
 path_pretrained_models: './pretrained_models'       # Path to the pretrained models
-execute_code: False                                 # Execute the code after generating it. Only applies to main_batch
+execute_code: True                                 # Execute the code after generating it. Only applies to main_batch
 
 dataset:                                            # Dataset configuration
     dataset_name: 'MyDataset'                       # Dataset name
@@ -49,7 +49,7 @@ gpt3:                                               # GPT-3 configuration
 
 codex:
     model: codellama
-    codellama_model_name: /pfss/mlde/workspaces/mlde_wsp_PI_Mezini/ya50pabo/models/manifests/registry.ollama.ai/library/codellama/latest
+    codellama_model_name: codellama/CodeLlama-7b-Python-hf
     temperature: 0.                                 # Temperature for Codex. (Almost) deterministic if 0
     best_of: 1                                      # Number of tries to choose from. Use when temperature > 0
     max_tokens: 512                                 # Maximum number of tokens to generate for Codex

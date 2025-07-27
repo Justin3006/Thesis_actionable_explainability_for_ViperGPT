@@ -21,8 +21,8 @@ class ImagePatch:
         Returns True if the property is met, and False otherwise.
     best_text_match(option_list: List[str], prefix: str)->str
         Returns the string that best matches the image.
-    simple_query(question: str=None)->str
-        Returns the answer to a basic question asked about the image. If no question is provided, returns the answer
+    simple_query(query: str=None)->str
+        Returns the answer to a basic query asked about the image. If no query is provided, returns the answer
         to "What is this?".
     compute_depth()->float
         Returns the median depth of the image crop.
@@ -117,7 +117,7 @@ class ImagePatch:
         >>> def execute_command(image) -> str:
         >>>     image_patch = ImagePatch(image)
         >>>     letters_patches = image_patch.find("letters")
-        >>>     # Question assumes only one letter patch
+        >>>     # query assumes only one letter patch
         >>>     return bool_to_yesno(letters_patches[0].verify_property("letters", "blue"))
         """
         return verify_property(self.cropped_image, object_name, property)
@@ -137,19 +137,19 @@ class ImagePatch:
         >>> def execute_command(image)->str:
         >>>     image_patch = ImagePatch(image)
         >>>     foo_patches = image_patch.find("foo")
-        >>>     # Question assumes one foo patch
+        >>>     # query assumes one foo patch
         >>>     return foo_patches[0].best_text_match(["gold", "white"])
         """
         return best_text_match(self.cropped_image, option_list, prefix)
 
-    def simple_query(self, question: str = None) -> str:
-        """Returns the answer to a basic question asked about the image. If no question is provided, returns the answer
-        to "What is this?". The questions are about basic perception, and are not meant to be used for complex reasoning
+    def simple_query(self, query: str = None) -> str:
+        """Returns the answer to a basic query asked about the image. If no query is provided, returns the answer
+        to "What is this?". The querys are about basic perception, and are not meant to be used for complex reasoning
         or external knowledge.
         Parameters
         -------
-        question : str
-            A string describing the question to be asked.
+        query : str
+            A string describing the query to be asked.
 
         Examples
         -------
@@ -177,7 +177,7 @@ class ImagePatch:
         >>>     bar_patch = bar_patches[1]
         >>>     return bar_patch.simple_query("Is the bar quuxy?")
         """
-        return simple_query(self.cropped_image, question)
+        return simple_query(self.cropped_image, query)
 
     def compute_depth(self):
         """Returns the median depth of the image crop
@@ -237,13 +237,13 @@ class ImagePatch:
         """
         return self.left <= right and self.right >= left and self.lower <= upper and self.upper >= lower
 
-    def llm_query(self, question: str, long_answer: bool = True) -> str:
-        '''Answers a text question using GPT-3. The input question is always a formatted string with a variable in it.
+    def llm_query(self, query: str, long_answer: bool = True) -> str:
+        '''Answers a text query using GPT-3. The input query is always a formatted string with a variable in it.
 
         Parameters
         ----------
-        question: str
-            the text question to ask. Must not contain any reference to 'the image' or 'the photo', etc.
+        query: str
+            the text query to ask. Must not contain any reference to 'the image' or 'the photo', etc.
         long_answer: bool
             whether to return a short answer or a long answer. Short answers are one or at most two words, very concise.
             Long answers are longer, and may be paragraphs and explanations. Defalt is True (so long answer).
@@ -274,7 +274,7 @@ class ImagePatch:
         >>>     object_name = object_patch.simple_query("What is the name of the object?")
         >>>     return object_patch.llm_query(f"What is the history behind {object_name}?", long_answer=True)
         '''
-        return llm_query(question, long_answer)
+        return llm_query(query, long_answer)
 
 
 def best_image_match(list_patches: List[ImagePatch], content: List[str], return_index=False) -> Union[ImagePatch, int]:

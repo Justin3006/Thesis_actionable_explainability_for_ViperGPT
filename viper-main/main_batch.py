@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 from configs import config
 from utils import seed_everything
-import datasets
+import dataset_helpers as datasets
 
 # See https://github.com/pytorch/pytorch/issues/11201, https://github.com/pytorch/pytorch/issues/973
 # Not for dataloader, but for multiprocessing batches
@@ -52,7 +52,7 @@ def run_program(parameters, queues_in_, input_type_, retrying=False):
                   'llm_query, bool_to_yesno, distance, best_image_match):\n' \
                   f'    # Answer is:'
     code = code_header + code
-
+    
     try:
         exec(compile(code, 'Codex', 'exec'), globals())
     except Exception as e:
@@ -109,7 +109,7 @@ def main():
     mp.set_start_method('spawn')
 
     from vision_processes import queues_in, finish_all_consumers, forward, manager
-    from datasets import get_dataset
+    from dataset_helpers import get_dataset
 
     batch_size = config.dataset.batch_size
     num_processes = min(batch_size, 50)
@@ -162,17 +162,18 @@ def main():
             n_batches = len(dataloader)
 
             for i, batch in tqdm(enumerate(dataloader), total=n_batches):
-
+                if i > 0:
+                    break
                 # Combine all queries and get Codex predictions for them
                 # TODO compute Codex for next batch as current batch is being processed
 
                 if not config.use_cached_codex:
                     codes = codex(prompt=batch['query'], base_prompt=base_prompt, input_type=input_type,
-                                  extra_context=batch['extra_context'])
+                                      extra_context=batch['extra_context'])
 
                 else:
                     codes = codes_all[i * batch_size:(i + 1) * batch_size]  # If cache
-
+                
                 # Run the code
                 if config.execute_code:
                     if not config.multiprocessing:
@@ -200,7 +201,7 @@ def main():
                 all_possible_answers += batch['possible_answers']
                 all_query_types += batch['query_type']
                 all_queries += batch['query']
-                all_img_paths += [dataset.get_sample_path(idx) for idx in batch['index']]
+                all_img_paths += [dataset.get_img_path(idx) for idx in batch['index']]
                 if i % config.log_every == 0:
                     try:
                         accuracy = dataset.accuracy(all_results, all_answers, all_possible_answers, all_query_types)

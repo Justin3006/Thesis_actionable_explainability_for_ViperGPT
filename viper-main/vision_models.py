@@ -964,9 +964,13 @@ class LlamaModel(BaseModel):
         with open(config.gpt3.guess_prompt) as f:
             self.guess_prompt = f.read().strip()
         
-        model_id = "meta-llama/Meta-Llama-3-8B"
-        import transformers
-        self.pipeline = transformers.pipeline("text-generation", model=model_id, model_kwargs={"torch_dtype": torch.bfloat16}, device_map="auto")
+        model_id = "meta-llama/Llama-3.1-8B-Instruct"
+        from transformers.models.llama.tokenization_llama import LlamaTokenizer
+        from transformers.models.llama.modeling_llama import LlamaForCausalLM 
+        from transformers import pipeline
+        tokenizer = LlamaTokenizer.from_pretrained(model_id)
+        model = LlamalForCausalLM.from_pretrained(model_id, device_map="auto")
+        self.pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer)
 
     # initial cleaning for reference QA results
     @staticmethod
@@ -1248,6 +1252,8 @@ class CodeLlama(CodexModel):
         super().__init__(gpu_number=gpu_number)
 
         from transformers import LlamaForCausalLM, CodeLlamaTokenizer
+        from transformers.models.code_llama.tokenization_code_llama import CodeLlamaTokenizer
+        from transformers.models.llama.modeling_llama import LlamaForCausalLM 
 
         # Load Llama2
         model_id = config.codex.codellama_model_name
@@ -1260,6 +1266,7 @@ class CodeLlama(CodexModel):
                                 'codellama/CodeLlama-7b-Python-hf', 'codellama/CodeLlama-13b-Python-hf',
                                 'codellama/CodeLlama-34b-Python-hf', 'codellama/CodeLlama-7b-Instruct-hf',
                                 'codellama/CodeLlama-13b-Instruct-hf', 'codellama/CodeLlama-34b-Instruct-hf']
+        
         self.tokenizer = CodeLlamaTokenizer.from_pretrained(model_id)
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = 'left'
@@ -1281,16 +1288,20 @@ class CodeLlama(CodexModel):
             torch_dtype=torch.float16,
             # load_in_8bit=True,  # For some reason this results in OOM when doing forward pass
             device_map="sequential",
-            max_memory=max_memory,
-        )
+            max_memory=max_memory)
         self.model.eval()
 
     def run_codellama(self, prompt):
         input_ids = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)["input_ids"]
-        generated_ids = self.model.generate(input_ids.to("cuda"), max_new_tokens=128)
+        generated_ids = self.model.generate(input_ids.to("cuda"), max_new_tokens=256)
         generated_ids = generated_ids[:, input_ids.shape[-1]:]
         generated_text = [self.tokenizer.decode(gen_id, skip_special_tokens=True) for gen_id in generated_ids]
-        generated_text = [text.split('\n\n')[0] for text in generated_text]
+        print()
+        print()
+        print(generated_text)
+        generated_text = [text.split('\n\n')[1].replace("[CODE]","").replace("[/CODE]","").replace("def execute_command(image):","    ").replace("def execute_command(image)->str:","    ") for text in generated_text]
+        print()
+        print(generated_text)
         return generated_text
 
     def forward_(self, extended_prompt):
@@ -1317,7 +1328,8 @@ class BLIPModel(BaseModel):
         super().__init__(gpu_number)
 
         # from lavis.models import load_model_and_preprocess
-        from transformers import Blip2Processor, Blip2ForConditionalGeneration
+        from transformers.models.blip_2.processing_blip_2 import Blip2Processor 
+        from transformers.models.blip_2.modeling_blip_2 import Blip2ForConditionalGeneration
 
         # https://huggingface.co/models?sort=downloads&search=Salesforce%2Fblip2-
         assert blip_v2_model_type in ['blip2-flan-t5-xxl', 'blip2-flan-t5-xl', 'blip2-opt-2.7b', 'blip2-opt-6.7b',

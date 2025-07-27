@@ -1,5 +1,5 @@
 dataset:
-    data_path: '/path/to/datasets/GQA'
+    data_path: '/pfss/mlde/workspaces/mlde_wsp_PI_Mezini/jl17wali/HF_HOME/GQA'
     dataset_name: GQA
     split: testdev
     testing: False
@@ -7,7 +7,8 @@ dataset:
     batch_size: 20
     start_sample: 0
 
-prompt : ./prompts/benchmarks/gqa.prompt
+codex:
+    prompt : ./prompts/benchmarks/gqa.prompt
 results_dir : ./results/gqa/
 
 load_models:
@@ -20,6 +21,8 @@ load_models:
     gpt3_qa: False
     gpt3_guess: False
     depth: False
+    llama_qa: False
+    llama_general: False
     blip: True
     saliency: False
     xvlm: True
