@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 import json
 import re
 
-from datasets import general_postprocessing, all_answers_from_dict
+from dataset_helpers import general_postprocessing, all_answers_from_dict
 
 import nltk
 nltk.download("punkt")
@@ -43,7 +43,7 @@ class OKVQADataset(Dataset):
                  image_transforms=None, question_transforms=None, tokenize=None,
                  # answer_selection=most_common_from_dict,
                  answer_selection=all_answers_from_dict,
-                 verbose=False, testing=False, max_samples=None):
+                 verbose=False, testing=False, max_samples=None, **kwargs):
         """
         split train, val, test
         balanced True, False
@@ -201,13 +201,13 @@ class OKVQADataset(Dataset):
 
         # Return
         if self.testing:
-            return {"sample_id": question_id, "img": img, "question": question, 'pil_img': pil_img, 'index': index,
-                    'possible_answers': [], 'info_to_prompt': question, 'question_type': -1}
+            return {"sample_id": question_id, "image": img, "query": question, 'pil_img': pil_img, 'index': index,
+                    'extra_context': '', 'possible_answers':[], 'info_to_prompt': question, 'query_type': -1}
 
         else:
-            return {"sample_id": question_id, 'answer': selected_answers, "img": img, "question": question,
-                    'pil_img': pil_img, 'index': index, 'possible_answers': [], 'info_to_prompt': question,
-                    "question_type": -1}
+            return {"sample_id": question_id, 'answer': selected_answers, "image": img, "query": question,
+                    'pil_img': pil_img, 'index': index, 'extra_context': '', 'possible_answers':[], 'info_to_prompt': question,
+                    "query_type": -1}
 
     def post_process(self, prediction, stem=True):
         """

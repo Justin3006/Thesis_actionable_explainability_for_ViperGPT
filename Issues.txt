@@ -59,4 +59,3 @@ In transformers.models.blip_2.modeling_blip2: from ...generation import Generati
 from transformers.models.code_llama.tokenization_code_llama import CodeLlamaTokenizer
 In vision_models: from transformers.models.llama.modeling_llama import LlamaForCausalLM 
 In gqa.py: add ', **kwargs' to init params
-copy the maskrcnn from GLIP folder to viper folder

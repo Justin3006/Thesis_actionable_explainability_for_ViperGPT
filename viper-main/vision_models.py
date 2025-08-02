@@ -964,14 +964,47 @@ class LlamaModel(BaseModel):
         with open(config.gpt3.guess_prompt) as f:
             self.guess_prompt = f.read().strip()
         
-        model_id = "meta-llama/Llama-3.1-8B-Instruct"
-        from transformers.models.llama.tokenization_llama import LlamaTokenizer
-        from transformers.models.llama.modeling_llama import LlamaForCausalLM 
+        model_id = "meta-llama/Llama-3.1-8B"
+        from transformers import AutoTokenizer, AutoModel
+        from transformers.models.llama.modeling_llama import LlamaForCausalLM
         from transformers import pipeline
-        tokenizer = LlamaTokenizer.from_pretrained(model_id)
-        model = LlamalForCausalLM.from_pretrained(model_id, device_map="auto")
-        self.pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer)
-
+        
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.padding_side = 'left'
+        
+        # Compute this when the other models have already been loaded
+        # Ignore gpu number
+        usage_ratio = 0.15  # If it is small, it will use more GPUs, which will allow larger batch sizes
+        leave_empty = 0.7  # If other models are using more than (1-leave_empty) of memory, do not use
+        max_memory = {}
+        for gpu_number in range(torch.cuda.device_count()):
+            mem_available = torch.cuda.mem_get_info(f'cuda:{gpu_number}')[0]
+            if mem_available <= leave_empty * torch.cuda.get_device_properties(gpu_number).total_memory:
+                mem_available = 0
+            max_memory[gpu_number] = mem_available * usage_ratio
+            if gpu_number == 0:
+                max_memory[gpu_number] /= 10
+        self.model = LlamaForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype=torch.float16,
+            # load_in_8bit=True,  # For some reason this results in OOM when doing forward pass
+            device_map="sequential",
+            max_memory=max_memory, 
+            offload_folder="/pfss/mlde/workspaces/mlde_wsp_PI_Mezini/jl17wali/HF_HOME/Buffer", 
+            offload_state_dict=True
+        )
+        self.model.eval()
+        
+        #self.model = LlamaForCausalLM.from_pretrained(model_id, device_map="auto", offload_folder="/pfss/mlde/workspaces/mlde_wsp_PI_Mezini/jl17wali/HF_HOME/Buffer", offload_state_dict=True)
+        #self.pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer)
+        #self.pipeline = pipeline(
+        #    "text-generation",
+        #    model=model_id,
+        #    model_kwargs={"torch_dtype": torch.bfloat16},
+        #    device_map="auto",
+        #)
+        
     # initial cleaning for reference QA results
     @staticmethod
     def process_answer(answer):
@@ -1019,7 +1052,10 @@ class LlamaModel(BaseModel):
         return response
 
     def query_llama(self, prompt):
-        response = self.pipeline(prompt)
+        #response = self.pipeline(prompt)
+        inputs = self.tokenizer(prompt)
+        outputs = self.model.generate(inputs['input_ids']) 
+        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
         return response
 
     def forward(self, prompt, process_name):
@@ -1139,7 +1175,7 @@ class CodexModel(BaseModel):
             with open(config.fixed_code_file) as f:
                 self.fixed_code = f.read()
 
-    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[], auto_improve_target=''):
+    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[], auto_improve_threshold=1):
         if config.use_fixed_code:  # Use the same program for every sample, like in socratic models
             return [self.fixed_code] * len(prompt) if isinstance(prompt, list) else self.fixed_code
 
@@ -1175,7 +1211,7 @@ class CodexModel(BaseModel):
         #########################
         ###   AUTO-IMPROVE
         #########################
-        if auto_improve_target != '':
+        if auto_improve_threshold < 1:
             import explainer
             for i in len(result):
                 code_0 = result[i]
@@ -1197,14 +1233,34 @@ class CodexModel(BaseModel):
                                            replace('INSERT_TYPE_HERE', input_type).
                                            replace('EXTRA_CONTEXT_HERE', extra_context)]
                     
-                    code_m = self.forward_(extended_prompt)
-                    if not isinstance(prompt, list):
-                        code_m = code_m[0]
+                    code_m = self.forward_(extended_prompt)[0]
                     explanans_collection[module] = explainer.gather_explanans(code_m, reduced_modules, used_modules)
 
                 summarized_explanans = explainer.summarize_explanans(explanans_collection)   
-                recommendation = explainer.get_recommendation(summarized_explanans, auto_improve_target)
-                result[i] = summarized_explanans['Alternate Code'][recommendation]
+                explainer.save_explanation(summarized_explanans)
+                recommendation = explainer.get_recommendation(summarized_explanans, auto_improve_threshold)
+                
+                if len(recommendation) == 1:
+                    result[i] = summarized_explanans[recommendation[0]]['Alternative Code']
+                
+                elif len(recommendation) > 1:
+                    reduced_modules = all_modules.copy()
+                    
+                    for module in recommendation:
+                        reduced_modules.remove(module)
+                        reduced_prompt = prompt_editing.remove_function_definitions(base_prompt, module)
+                        reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
+
+                    if isinstance(prompt, list):
+                        extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
+                                           replace('INSERT_TYPE_HERE', input_type).
+                                           replace('EXTRA_CONTEXT_HERE', extra_context[i])]
+                    elif isinstance(prompt, str):
+                        extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
+                                           replace('INSERT_TYPE_HERE', input_type).
+                                           replace('EXTRA_CONTEXT_HERE', extra_context)]
+                    
+                    result[i] = self.forward_(extended_prompt)[0]
         return result
 
     def forward_(self, extended_prompt):

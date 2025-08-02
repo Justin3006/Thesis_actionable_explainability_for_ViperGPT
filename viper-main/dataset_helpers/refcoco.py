@@ -218,14 +218,8 @@ class RefCOCODataset(Dataset):
         item = self.dataset[index]
         
         bbox = item['bbox']
-        if bbox[0] > bbox[2]:
-            temp = bbox[0]
-            bbox[0] = bbox[2]
-            bbox[2] = temp
-        if bbox[1] > bbox[3]:
-            temp = bbox[1]
-            bbox[1] = bbox[3]
-            bbox[3] = temp
+        bbox[2] = bbox[0] + bbox[2]
+        bbox[3] = bbox[1] + bbox[3]
             
         pil_img = item['image'].convert("RGB")
         if self.image_transforms:
