@@ -996,15 +996,6 @@ class LlamaModel(BaseModel):
         )
         self.model.eval()
         
-        #self.model = LlamaForCausalLM.from_pretrained(model_id, device_map="auto", offload_folder="/pfss/mlde/workspaces/mlde_wsp_PI_Mezini/jl17wali/HF_HOME/Buffer", offload_state_dict=True)
-        #self.pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer)
-        #self.pipeline = pipeline(
-        #    "text-generation",
-        #    model=model_id,
-        #    model_kwargs={"torch_dtype": torch.bfloat16},
-        #    device_map="auto",
-        #)
-        
     # initial cleaning for reference QA results
     @staticmethod
     def process_answer(answer):
@@ -1074,7 +1065,7 @@ class LlamaModel(BaseModel):
             for p in prompt:
                 # This is not ideal, because if not found, later it will have to re-hash the arguments.
                 # But I could not find a better way to do it.
-                result = gpt3_cache_aux(process_name, p, self.temperature, self.n_votes, None)
+                result = gpt3_cache_aux(process_name, p, 0, 0, None)
                 results.append(result)  # If in cache, will be actual result, otherwise None
             to_compute = [i for i, r in enumerate(results) if r is None]
             prompt = [prompt[i] for i in to_compute]
@@ -1092,7 +1083,7 @@ class LlamaModel(BaseModel):
         if config.use_cache:
             for p, r in zip(prompt, response):
                 # "call" forces the overwrite of the cache
-                gpt3_cache_aux.call(process_name, p, self.temperature, self.n_votes, r)
+                gpt3_cache_aux.call(process_name, p, 0, 0, r)
             for i, idx in enumerate(to_compute):
                 results[idx] = response[i]
         else:
@@ -1175,7 +1166,7 @@ class CodexModel(BaseModel):
             with open(config.fixed_code_file) as f:
                 self.fixed_code = f.read()
 
-    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[], auto_improve_threshold=1):
+    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[], auto_improve_threshold=0.5):
         if config.use_fixed_code:  # Use the same program for every sample, like in socratic models
             return [self.fixed_code] * len(prompt) if isinstance(prompt, list) else self.fixed_code
 
@@ -1211,9 +1202,10 @@ class CodexModel(BaseModel):
         #########################
         ###   AUTO-IMPROVE
         #########################
-        if auto_improve_threshold < 1:
+        if auto_improve_threshold > 0:
             import explainer
             for i in len(result):
+                # Find improvement recommendation.
                 code_0 = result[i]
                 used_modules = explainer.identify_used_modules(code_0, all_modules)
                 explanans_collection = {'': explainer.gather_explanans(code_0, all_modules, used_modules)}
@@ -1240,6 +1232,7 @@ class CodexModel(BaseModel):
                 explainer.save_explanation(summarized_explanans)
                 recommendation = explainer.get_recommendation(summarized_explanans, auto_improve_threshold)
                 
+                # Return improved code.
                 if len(recommendation) == 1:
                     result[i] = summarized_explanans[recommendation[0]]['Alternative Code']
                 
@@ -1262,6 +1255,38 @@ class CodexModel(BaseModel):
                     
                     result[i] = self.forward_(extended_prompt)[0]
         return result
+
+    def forward_(self, extended_prompt):
+        if len(extended_prompt) > self.max_batch_size:
+            response = []
+            for i in range(0, len(extended_prompt), self.max_batch_size):
+                response += self.forward_(extended_prompt[i:i + self.max_batch_size])
+            return response
+        try:
+            response = codex_helper(extended_prompt)
+        except openai.error.RateLimitError as e:
+            print("Retrying Codex, splitting batch")
+            if len(extended_prompt) == 1:
+                warnings.warn("This is taking too long, maybe OpenAI is down? (status.openai.com/)")
+            # Will only be here after the number of retries in the backoff decorator.
+            # It probably means a single batch takes up the entire rate limit.
+            sub_batch_1 = extended_prompt[:len(extended_prompt) // 2]
+            sub_batch_2 = extended_prompt[len(extended_prompt) // 2:]
+            if len(sub_batch_1) > 0:
+                response_1 = self.forward_(sub_batch_1)
+            else:
+                response_1 = []
+            if len(sub_batch_2) > 0:
+                response_2 = self.forward_(sub_batch_2)
+            else:
+                response_2 = []
+            response = response_1 + response_2
+        except Exception as e:
+            # Some other error like an internal OpenAI error
+            print("Retrying Codex")
+            print(e)
+            response = self.forward_(extended_prompt)
+        return response
 
     def forward_(self, extended_prompt):
         if len(extended_prompt) > self.max_batch_size:
@@ -1343,7 +1368,10 @@ class CodeLlama(CodexModel):
             torch_dtype=torch.float16,
             # load_in_8bit=True,  # For some reason this results in OOM when doing forward pass
             device_map="sequential",
-            max_memory=max_memory)
+            max_memory=max_memory, 
+            offload_folder="/pfss/mlde/workspaces/mlde_wsp_PI_Mezini/jl17wali/HF_HOME/Buffer", 
+            offload_state_dict=True
+        )
         self.model.eval()
 
     def run_codellama(self, prompt):
@@ -1351,12 +1379,7 @@ class CodeLlama(CodexModel):
         generated_ids = self.model.generate(input_ids.to("cuda"), max_new_tokens=256)
         generated_ids = generated_ids[:, input_ids.shape[-1]:]
         generated_text = [self.tokenizer.decode(gen_id, skip_special_tokens=True) for gen_id in generated_ids]
-        print()
-        print()
-        print(generated_text)
         generated_text = [text.split('\n\n')[1].replace("[CODE]","").replace("[/CODE]","").replace("def execute_command(image):","    ").replace("def execute_command(image)->str:","    ") for text in generated_text]
-        print()
-        print(generated_text)
         return generated_text
 
     def forward_(self, extended_prompt):

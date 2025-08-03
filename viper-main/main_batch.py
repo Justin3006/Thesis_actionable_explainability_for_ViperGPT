@@ -165,8 +165,7 @@ def main():
                 if i > 0:
                     break
                 # Combine all queries and get Codex predictions for them
-                # TODO compute Codex for next batch as current batch is being processed
-
+                # TODO compute Codex for next batch as current batch is being processed                
                 if not config.use_cached_codex:
                     codes = codex(prompt=batch['query'], base_prompt=base_prompt, input_type=input_type,
                                       extra_context=batch['extra_context'])

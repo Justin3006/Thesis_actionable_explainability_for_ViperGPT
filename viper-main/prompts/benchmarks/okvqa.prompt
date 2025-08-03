@@ -1,3 +1,4 @@
+[INST]
 from PIL import Image
 from vision_functions import obtain_query_response_from_image
 from nlp_functions import llm_query, process_guesses
@@ -141,5 +142,13 @@ def execute_command(image)->str:
     guesses.append(direct_guess)
     return process_guesses("Where can I get a laptop like the one found here?", guesses)
 
-# INSERT_PROMPT_HERE
-def execute_command(image)->str:
+Write a function using Python and the ImagePatch class (above) that could be executed to provide an answer to the query. 
+
+Consider the following guidelines:
+- Use base Python (comparison, sorting) for basic logical operations, left/right/up/down, math, etc.
+- Use only 'INSERT_TYPE_HERE' as a parameter to the function.
+- Put your code between [CODE] and [/CODE]
+- Do not return the instructions or API back.
+
+Query: INSERT_QUERY_HERE
+[/INST]

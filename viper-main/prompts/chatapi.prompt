@@ -1,6 +1,4 @@
 [INST]
-import math
-
 class ImagePatch:
     """A Python class containing a crop of an image centered around a particular object, as well as relevant information.
     Attributes
@@ -277,7 +275,6 @@ class ImagePatch:
         '''
         return llm_query(question, long_answer)
 
-
 def best_image_match(list_patches: List[ImagePatch], content: List[str], return_index=False) -> Union[ImagePatch, int]:
     """Returns the patch most likely to contain the content.
     Parameters
@@ -294,7 +291,6 @@ def best_image_match(list_patches: List[ImagePatch], content: List[str], return_
         Patch most likely to contain the object
     """
     return best_image_match(list_patches, content, return_index)
-
 
 def distance(patch_a: ImagePatch, patch_b: ImagePatch) -> float:
     """
@@ -319,10 +315,8 @@ def distance(patch_a: ImagePatch, patch_b: ImagePatch) -> float:
     """
     return distance(patch_a, patch_b)
 
-
 def bool_to_yesno(bool_answer: bool) -> str:
     return "yes" if bool_answer else "no"
-
 
 def coerce_to_numeric(string):
     """
@@ -330,13 +324,14 @@ def coerce_to_numeric(string):
     If the input string contains a range (e.g. "10-15"), it returns the first value in the range.
     """
     return coerce_to_numeric(string)
-    
 
 Write a function using Python and the ImagePatch class (above) that could be executed to provide an answer to the query. 
 
 Consider the following guidelines:
 - Use base Python (comparison, sorting) for basic logical operations, left/right/up/down, math, etc.
 - Use only 'INSERT_TYPE_HERE' as a parameter to the function.
+- Put your code between [CODE] and [/CODE]
+- Do not return the instructions or API back.
 
 Query: INSERT_QUERY_HERE
 [/INST]

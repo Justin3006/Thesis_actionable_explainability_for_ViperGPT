@@ -1,5 +1,5 @@
 dataset:
-    data_path: 'pfss/mlde/workspaces/mlde_wsp_PI_Mezini/jl17wali/HF_HOME/OKVQA'
+    data_path: '/pfss/mlde/workspaces/mlde_wsp_PI_Mezini/jl17wali/HF_HOME/OKVQA'
     dataset_name: OKVQA
     split: test
     testing: False
@@ -7,8 +7,8 @@ dataset:
     batch_size: 20
     start_sample: 0
 
-prompt: ./prompts/benchmarks/okvqa.prompt
-
+codex:
+    prompt: ./prompts/benchmarks/okvqa.prompt
 results_dir: ./results/okvqa/
 
 load_models:
@@ -17,9 +17,12 @@ load_models:
     glip: False
     owlvit: False
     tcl: False
-    gpt3_list: True
-    gpt3_qa: True
-    gpt3_guess: True
+    gpt3_list: False
+    gpt3_qa: False
+    gpt3_guess: False
+    llama_list: True
+    llama_qa: True
+    llama_general: True
     depth: False
     blip: True
     saliency: False

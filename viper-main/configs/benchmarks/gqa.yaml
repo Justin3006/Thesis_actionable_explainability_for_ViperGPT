@@ -8,7 +8,7 @@ dataset:
     start_sample: 0
 
 codex:
-    prompt : ./prompts/benchmarks/gqa.prompt
+    prompt : ./prompts/chatapi.prompt
 results_dir : ./results/gqa/
 
 load_models:
@@ -20,9 +20,10 @@ load_models:
     gpt3_list: False
     gpt3_qa: False
     gpt3_guess: False
-    depth: False
-    llama_qa: False
-    llama_general: False
+    depth: True
+    llama_list: True
+    llama_qa: True
+    llama_general: True
     blip: True
     saliency: False
     xvlm: True
