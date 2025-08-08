@@ -1166,7 +1166,7 @@ class CodexModel(BaseModel):
             with open(config.fixed_code_file) as f:
                 self.fixed_code = f.read()
 
-    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[], auto_improve_threshold=0.5):
+    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[], auto_improve_threshold=0):
         if config.use_fixed_code:  # Use the same program for every sample, like in socratic models
             return [self.fixed_code] * len(prompt) if isinstance(prompt, list) else self.fixed_code
 
@@ -1180,7 +1180,7 @@ class CodexModel(BaseModel):
         all_modules = prompt_editing.gather_modules(base_prompt, ['__init__', 'execute_command'])
         module_list_out.extend(all_modules)
         for module in supressed_modules:
-            base_prompt = prompt_editing.remove_function_definitions(base_prompt, module)
+            base_prompt = prompt_editing.remove_function_definition(base_prompt, module)
             base_prompt = prompt_editing.remove_function_examples(base_prompt, module, 'execute_command')
 
         if isinstance(prompt, list):
@@ -1203,17 +1203,21 @@ class CodexModel(BaseModel):
         ###   AUTO-IMPROVE
         #########################
         if auto_improve_threshold > 0:
+            
             import explainer
-            for i in len(result):
+            for i in range(len(result)):
+                
                 # Find improvement recommendation.
                 code_0 = result[i]
                 used_modules = explainer.identify_used_modules(code_0, all_modules)
+                if len(used_modules) <= 2:
+                    continue
                 explanans_collection = {'': explainer.gather_explanans(code_0, all_modules, used_modules)}
                 
                 for module in used_modules.keys():
                     reduced_modules = all_modules.copy()
                     reduced_modules.remove(module)
-                    reduced_prompt = prompt_editing.remove_function_definitions(base_prompt, module)
+                    reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
                     reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
 
                     if isinstance(prompt, list):
@@ -1226,9 +1230,11 @@ class CodexModel(BaseModel):
                                            replace('EXTRA_CONTEXT_HERE', extra_context)]
                     
                     code_m = self.forward_(extended_prompt)[0]
+                    used_modules = explainer.identify_used_modules(code_m, all_modules)
                     explanans_collection[module] = explainer.gather_explanans(code_m, reduced_modules, used_modules)
-
-                summarized_explanans = explainer.summarize_explanans(explanans_collection)   
+                
+                summarized_explanans = explainer.summarize_explanans(explanans_collection)  
+                print(summarized_explanans)
                 explainer.save_explanation(summarized_explanans)
                 recommendation = explainer.get_recommendation(summarized_explanans, auto_improve_threshold)
                 
@@ -1241,7 +1247,7 @@ class CodexModel(BaseModel):
                     
                     for module in recommendation:
                         reduced_modules.remove(module)
-                        reduced_prompt = prompt_editing.remove_function_definitions(base_prompt, module)
+                        reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
                         reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
 
                     if isinstance(prompt, list):
@@ -1379,7 +1385,9 @@ class CodeLlama(CodexModel):
         generated_ids = self.model.generate(input_ids.to("cuda"), max_new_tokens=256)
         generated_ids = generated_ids[:, input_ids.shape[-1]:]
         generated_text = [self.tokenizer.decode(gen_id, skip_special_tokens=True) for gen_id in generated_ids]
-        generated_text = [text.split('\n\n')[1].replace("[CODE]","").replace("[/CODE]","").replace("def execute_command(image):","    ").replace("def execute_command(image)->str:","    ") for text in generated_text]
+        start = "[CODE]"
+        end = "[/CODE]"
+        generated_text = [text[text.find(start)+len(start):text.find(end)].replace("def execute_command(image):","    ").replace("def execute_command(image)->str:","    ") for text in generated_text]
         return generated_text
 
     def forward_(self, extended_prompt):

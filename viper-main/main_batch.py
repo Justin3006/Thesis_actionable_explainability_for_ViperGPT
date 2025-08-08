@@ -162,8 +162,6 @@ def main():
             n_batches = len(dataloader)
 
             for i, batch in tqdm(enumerate(dataloader), total=n_batches):
-                if i > 0:
-                    break
                 # Combine all queries and get Codex predictions for them
                 # TODO compute Codex for next batch as current batch is being processed                
                 if not config.use_cached_codex:
