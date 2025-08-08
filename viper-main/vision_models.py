@@ -1206,13 +1206,10 @@ class CodexModel(BaseModel):
             
             import explainer
             for i in range(len(result)):
-                
                 # Find improvement recommendation.
                 code_0 = result[i]
                 used_modules = explainer.identify_used_modules(code_0, all_modules)
-                if len(used_modules) <= 2:
-                    continue
-                explanans_collection = {'': explainer.gather_explanans(code_0, all_modules, used_modules)}
+                metadata_collection = {'': explainer.gather_metadata(code_0, all_modules, used_modules)}
                 
                 for module in used_modules.keys():
                     reduced_modules = all_modules.copy()
@@ -1231,16 +1228,15 @@ class CodexModel(BaseModel):
                     
                     code_m = self.forward_(extended_prompt)[0]
                     used_modules = explainer.identify_used_modules(code_m, all_modules)
-                    explanans_collection[module] = explainer.gather_explanans(code_m, reduced_modules, used_modules)
+                    metadata_collection[module] = explainer.gather_metadata(code_m, reduced_modules, used_modules)
                 
-                summarized_explanans = explainer.summarize_explanans(explanans_collection)  
-                print(summarized_explanans)
-                explainer.save_explanation(summarized_explanans)
-                recommendation = explainer.get_recommendation(summarized_explanans, auto_improve_threshold)
+                explanation = explainer.generate_explanation(metadata_collection)  
+                explainer.save_explanation(explanation)
+                recommendation = explainer.get_recommendation(explanation, auto_improve_threshold)
                 
                 # Return improved code.
                 if len(recommendation) == 1:
-                    result[i] = summarized_explanans[recommendation[0]]['Alternative Code']
+                    result[i] = explanation[recommendation[0]]['Alternative Code']
                 
                 elif len(recommendation) > 1:
                     reduced_modules = all_modules.copy()

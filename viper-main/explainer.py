@@ -28,40 +28,40 @@ def identify_used_modules(code:str, modules:List[str]) -> Dict[str, int]:
     return used_modules
 
 
-def get_module_confidences(explanans_collection:Dict[str, Dict], ties:Dict[str, Dict]) -> Dict[str, float]:
+def get_module_confidences(metadata_collection:Dict[str, Dict], ties:Dict[str, Dict]) -> Dict[str, float]:
     """
     Calculates for each module, what percent of the time it is used in the different code versions.
     
-    :param explanans_collection: Explanans per code version.
+    :param metadata_collection: Metadata per code version.
     :param ties: Dict containing ties per module.
     :returns: Dictionary of confidence per module.
     """
-    modules = explanans_collection['']['Available Modules']
+    modules = metadata_collection['']['Available Modules']
     confidences = {}
     
     for module in modules:
-        num_occurences = sum([1 if module in explanans['Used Modules'] or other_module != '' and ties[module][other_module] == 1 else 0 for other_module, explanans in explanans_collection.items()])
-        confidences[module] = num_occurences/len(explanans_collection)
+        num_occurences = sum([1 if module in metadata['Used Modules'] or other_module != '' and ties[module][other_module] == 1 else 0 for other_module, metadata in metadata_collection.items()])
+        confidences[module] = num_occurences/len(metadata_collection)
         
     return confidences
 
 
-def get_module_ties(explanans_collection:Dict[str, Dict]) -> Dict[str, Dict]:
+def get_module_ties(metadata_collection:Dict[str, Dict]) -> Dict[str, Dict]:
     """
     Calculates for each module, what percent of the time it is used with each other module.
     
-    :param explanans_collection: Explanans per code version.
+    :param metadata_collection: Metadata per code version.
     :returns: Dictionary of module ties per module.
     """
-    modules = explanans_collection['']['Available Modules']
+    modules = metadata_collection['']['Available Modules']
     ties = {}
     
     for module in modules:
         ties_m = {}
-        num_occurences = sum([1 if module in explanans['Used Modules'] else 0 for m, explanans in explanans_collection.items()])
+        num_occurences = sum([1 if module in metadata['Used Modules'] else 0 for m, metadata in metadata_collection.items()])
         if num_occurences > 0:
             for other_module in modules:
-                num_sim_occurences = sum([1 if module in explanans['Used Modules'] and other_module in explanans['Used Modules'] else 0 for m, explanans in explanans_collection.items()])
+                num_sim_occurences = sum([1 if module in metadata['Used Modules'] and other_module in metadata['Used Modules'] else 0 for m, metadata in metadata_collection.items()])
                 ties_m[other_module] = num_sim_occurences/num_occurences
         else:
             ties_m = {other_module:0 for other_module in modules}
@@ -71,64 +71,64 @@ def get_module_ties(explanans_collection:Dict[str, Dict]) -> Dict[str, Dict]:
     return ties
 
 
-def gather_explanans(code:str, all_modules:List[str], used_modules:Dict[str,int]) -> Dict[str, Any]:
+def gather_metadata(code:str, all_modules:List[str], used_modules:Dict[str,int]) -> Dict[str, Any]:
     """
-    Gathers explanans for a given code snippet.
+    Gathers metadata for a given code snippet.
     
-    :param code: Code snippet to generate explanans for.
+    :param code: Code snippet to generate metadata for.
     :param all_modules: All modules that could have been used in the code.
     :param used_modules: All modules that were used.
-    :returns: Dictionary containing explanans related different aspects of the code.
+    :returns: Dictionary containing metadata related different aspects of the code.
     """
-    explanans = {}
-    explanans['Alternative Code'] = code
-    explanans['Used Modules'] = used_modules
-    explanans['Available Modules'] = all_modules
-    return explanans
+    metadata = {}
+    metadata['Alternative Code'] = code
+    metadata['Used Modules'] = used_modules
+    metadata['Available Modules'] = all_modules
+    return metadata
 
 
-def summarize_explanans(explanans_collection:Dict[str, Dict]) -> Dict[str, Any]:
+def generate_explanation(metadata_collection:Dict[str, Dict]) -> Dict[str, Any]:
     """
-    Summarizes previously collected explanans into a new Dictionary.
+    Generates an explanation from previously collected metadata.
     
-    :param explanans_collection: Dictionary of explanans collected per code version.
-    :returns: Dictionary of summarized explanans.
+    :param metadata_collection: Dictionary of metadata collected per code version.
+    :returns: Dictionary containing explanation elements.
     """
-    summarized_explanans = {}
-    ties = get_module_ties(explanans_collection)
-    confidences = get_module_confidences(explanans_collection, ties)
+    explanation = {}
+    ties = get_module_ties(metadata_collection)
+    confidences = get_module_confidences(metadata_collection, ties)
     
-    for module in explanans_collection['']['Available Modules']:
-        summarized_explanans[module]['Confidence'] = confidences[module] if module != '' else 1
-        summarized_explanans[module]['Ties'] = ties[module] if module != '' else {}
-        if module in explanans_collection['']['Used Modules']:
-            summarized_explanans[module]['Alternative Code'] = explanans_collection[module]['Alternative Code']
+    for module in metadata_collection['']['Available Modules']:
+        explanation[module]['Confidence'] = confidences[module] if module != '' else 1
+        explanation[module]['Ties'] = ties[module] if module != '' else {}
+        if module in metadata_collection['']['Used Modules']:
+            explanation[module]['Alternative Code'] = metadata_collection[module]['Alternative Code']
         else:
-            summarized_explanans[module]['Alternative Code'] = ''
+            explanation[module]['Alternative Code'] = ''
 
-    return summarized_explanans
+    return explanation
 
 
-def get_recommendation(summarized_explanans:Dict[str, Any], threshold:float) -> List[str]:
+def get_recommendation(explanation:Dict[str, Any], threshold:float) -> List[str]:
     """
     Recommends which module to cut if any.
     
-    :param summarized_explanans: Dictionary containing explanans for the code.
+    :param explanation: Dictionary containing explanation for the code.
     :param threshold: Confidence threshold below which to cut modules.
     :returns: Name of the module recommendet to cut.
     """
-    used = identify_used_modules(summarized_explanans['']['Alternative Code'])
-    not_used = [module for module in summarized_explanans if module != '' and module not in used]
-    threshold = np.max([summarized_explanans[module]['Confidence'] for module in not_used])
-    below_threshold = [module for module in used if summarized_explanans[module]['Confidence'] < threshold]
+    used = identify_used_modules(explanation['']['Alternative Code'])
+    not_used = [module for module in explanation if module != '' and module not in used]
+    threshold = np.max([explanation[module]['Confidence'] for module in not_used])
+    below_threshold = [module for module in used if explanation[module]['Confidence'] < threshold]
     return below_threshold
 
 
-def save_explanation(summarized_explanans:Dict[str, Any], filename: str = 'explanans') -> None:
+def save_explanation(explanation:Dict[str, Any], filename: str = 'explanation') -> None:
     """
     Save explanation in a json file.
     
-    :param summarized_explanans: Explanation to save.
+    :param explanation: Explanation to save.
     """
     results_dir = pathlib.Path(config['results_dir'])
     results_file = results_dir/filename
@@ -142,7 +142,7 @@ def save_explanation(summarized_explanans:Dict[str, Any], filename: str = 'expla
     else:
         existing_data = {}
 
-    for key, value in summarized_explanans.items():
+    for key, value in explanation.items():
         if key in existing_data:
             if not isinstance(existing_data[key], list):
                 existing_data[key] = [existing_data[key]]
@@ -163,20 +163,20 @@ def save_explanation(summarized_explanans:Dict[str, Any], filename: str = 'expla
 #    
 #    :param query: What query to generate code for.
 #    :param target: What you want to optimize for.
-#    :returns: Generated code, Dictionary containing explanans for the code, Module recommended to cut.
+#    :returns: Generated code, Dictionary containing explanation for the code, Module recommended to cut.
 #    """
 #    all_modules = []
 #    code_0 = viperGPT.get_code(query, module_list_out=all_modules)
 #    used_modules = identify_used_modules(code_0, all_modules)
 #    
-#    explanans_collection = {'': gather_explanans(code_0, all_modules, used_modules)}
+#    metadata_collection = {'': gather_metadata(code_0, all_modules, used_modules)}
 #    
 #    for module in used_modules.keys():
 #        reduced_modules = all_modules.copy()
 #        reduced_modules.remove(module)
 #        code_m = viperGPT.get_code(query, supressed_modules=[module])
-#        explanans_collection[module] = gather_explanans(code_m, reduced_modules, used_modules)
+#        metadata_collection[module] = gather_metadata(code_m, reduced_modules, used_modules)
 #
-#    summarized_explanans = summarize_explanans(explanans_collection)   
-#    recommendation = get_recommendation(summarized_explanans, target)
-#    return code_0, summarized_explanans, recommendation
+#    explanation = generate_explanation(metadata_collection)   
+#    recommendation = get_recommendation(explanation, target)
+#    return code_0, explanation, recommendation
