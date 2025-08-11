@@ -117,7 +117,7 @@ def remove_function_examples(code:str, function_name:str, execute_command:str) -
     
             if count_leading_whitespace(line) <= example_ident:
                 if function_found:
-                    while len(updated_lines) >= example_start_ind:
+                    for i in range(ind - example_start_ind + 2):
                         updated_lines.pop()
                 example_start_ind = -1
                 example_ident = -1
