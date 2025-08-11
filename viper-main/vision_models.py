@@ -1166,7 +1166,7 @@ class CodexModel(BaseModel):
             with open(config.fixed_code_file) as f:
                 self.fixed_code = f.read()
 
-    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[], auto_improve_threshold=0):
+    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[], auto_improve_threshold=0, least_perturbations=10):
         if config.use_fixed_code:  # Use the same program for every sample, like in socratic models
             return [self.fixed_code] * len(prompt) if isinstance(prompt, list) else self.fixed_code
 
@@ -1209,9 +1209,18 @@ class CodexModel(BaseModel):
                 # Find improvement recommendation.
                 code_0 = result[i]
                 used_modules = explainer.identify_used_modules(code_0, all_modules)
-                metadata_collection = {'': explainer.gather_metadata(code_0, all_modules, used_modules)}
                 
-                for module in used_modules.keys():
+                required_perturbation_cycles = int(least_perturbations / (len(used_modules)+1)) + 1
+                metadata_collection = [{} for cycle in range(required_perturbation_cycles)]
+                
+                # Repeat for full prompt.
+                for cycle in range(required_perturbation_cycles):
+                    code_0 = self.forward_(extended_prompt)[0]
+                    used_modules = explainer.identify_used_modules(code_0, all_modules)
+                    metadata_collection[cycle][''] = explainer.gather_metadata(code_0, all_modules, used_modules)
+                
+                # Repeat for reduced prompts.
+                for module in metadata_collection[0]['']['Used Modules']:
                     reduced_modules = all_modules.copy()
                     reduced_modules.remove(module)
                     reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
@@ -1226,9 +1235,10 @@ class CodexModel(BaseModel):
                                            replace('INSERT_TYPE_HERE', input_type).
                                            replace('EXTRA_CONTEXT_HERE', extra_context)]
                     
-                    code_m = self.forward_(extended_prompt)[0]
-                    used_modules = explainer.identify_used_modules(code_m, all_modules)
-                    metadata_collection[module] = explainer.gather_metadata(code_m, reduced_modules, used_modules)
+                    for cycle in range(required_perturbation_cycles):
+                        code_m = self.forward_(extended_prompt)[0]
+                        used_modules = explainer.identify_used_modules(code_m, all_modules)
+                        metadata_collection[cycle][module] = explainer.gather_metadata(code_m, reduced_modules, used_modules)
                 
                 explanation = explainer.generate_explanation(metadata_collection)  
                 explainer.save_explanation(explanation)
@@ -1236,7 +1246,7 @@ class CodexModel(BaseModel):
                 
                 # Return improved code.
                 if len(recommendation) == 1:
-                    result[i] = explanation[recommendation[0]]['Alternative Code']
+                    result[i] = explanation[recommendation[0]]['Alternative Code'][0]
                 
                 elif len(recommendation) > 1:
                     reduced_modules = all_modules.copy()
@@ -1383,7 +1393,10 @@ class CodeLlama(CodexModel):
         generated_text = [self.tokenizer.decode(gen_id, skip_special_tokens=True) for gen_id in generated_ids]
         start = "[CODE]"
         end = "[/CODE]"
-        generated_text = [text[text.find(start)+len(start):text.find(end)].replace("def execute_command(image):","    ").replace("def execute_command(image)->str:","    ") for text in generated_text]
+        generated_text = [text[text.find(start)+len(start):text.find(end)].
+                          replace("def execute_command(image):","    ").
+                          replace("def execute_command(image)->str:","    ") 
+                          for text in generated_text]
         return generated_text
 
     def forward_(self, extended_prompt):

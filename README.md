@@ -26,3 +26,7 @@ TODO:
   - Get confidence and ties statistics for different modules
 - Verbalize approach
 - fine-tune first three chapters of the thesis 
+
+Note:
+analysis_code contains code used for conducting the evaluation.
+viper-main contains the original ViperGPT-Code + extensions for generating explanations

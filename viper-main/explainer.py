@@ -1,3 +1,4 @@
+from importlib import metadata
 from typing import Dict, List, Any, Tuple
 #import main_simple_lib as viperGPT
 import numpy as np
@@ -28,7 +29,7 @@ def identify_used_modules(code:str, modules:List[str]) -> Dict[str, int]:
     return used_modules
 
 
-def get_module_confidences(metadata_collection:Dict[str, Dict], ties:Dict[str, Dict]) -> Dict[str, float]:
+def get_module_confidences(metadata_collection:List[Dict[str, Dict]], ties:Dict[str, Dict]) -> Dict[str, float]:
     """
     Calculates for each module, what percent of the time it is used in the different code versions.
     
@@ -36,37 +37,40 @@ def get_module_confidences(metadata_collection:Dict[str, Dict], ties:Dict[str, D
     :param ties: Dict containing ties per module.
     :returns: Dictionary of confidence per module.
     """
-    modules = metadata_collection['']['Available Modules']
-    confidences = {}
+    modules = metadata_collection[0]['']['Available Modules']
+    confidences = {module:0 for module in modules}
     
-    for module in modules:
-        num_occurences = sum([1 if module in metadata['Used Modules'] or other_module != '' and ties[module][other_module] == 1 else 0 for other_module, metadata in metadata_collection.items()])
-        confidences[module] = num_occurences/len(metadata_collection)
-        
+    for cycle in range(len(metadata_collection)):
+        for module in modules:
+            num_occurences = sum([1 if module in metadata['Used Modules'] or module == other_module else 0 for other_module, metadata in metadata_collection[cycle].items()])
+            confidences[module] += num_occurences/(len(metadata_collection))
+    for module in confidences: 
+        confidences[module] /= len(metadata_collection)
+
     return confidences
 
 
-def get_module_ties(metadata_collection:Dict[str, Dict]) -> Dict[str, Dict]:
+def get_module_ties(metadata_collection:List[Dict[str, Dict]]) -> Dict[str, Dict]:
     """
     Calculates for each module, what percent of the time it is used with each other module.
     
     :param metadata_collection: Metadata per code version.
     :returns: Dictionary of module ties per module.
     """
-    modules = metadata_collection['']['Available Modules']
-    ties = {}
+    modules = metadata_collection[0]['']['Available Modules']
+    ties = {module:{other_module:0 for other_module in modules} for module in modules}
     
+    for cycle in range(len(metadata_collection)):
+        for module in modules:
+            num_occurences = sum([1 if module in metadata['Used Modules'] else 0 for m, metadata in metadata_collection[cycle].items()])
+            if num_occurences > 0:
+                for other_module in modules:
+                    num_sim_occurences = sum([1 if module in metadata['Used Modules'] and other_module in metadata['Used Modules'] else 0 for m, metadata in metadata_collection[cycle].items()])
+                    ties[module][other_module] += num_sim_occurences/num_occurences
+                    
     for module in modules:
-        ties_m = {}
-        num_occurences = sum([1 if module in metadata['Used Modules'] else 0 for m, metadata in metadata_collection.items()])
-        if num_occurences > 0:
-            for other_module in modules:
-                num_sim_occurences = sum([1 if module in metadata['Used Modules'] and other_module in metadata['Used Modules'] else 0 for m, metadata in metadata_collection.items()])
-                ties_m[other_module] = num_sim_occurences/num_occurences
-        else:
-            ties_m = {other_module:0 for other_module in modules}
-        
-        ties[module] = ties_m
+        for other_module in modules:
+            ties[module][other_module] /= len(metadata_collection)
 
     return ties
 
@@ -87,24 +91,26 @@ def gather_metadata(code:str, all_modules:List[str], used_modules:Dict[str,int])
     return metadata
 
 
-def generate_explanation(metadata_collection:Dict[str, Dict]) -> Dict[str, Any]:
+def generate_explanation(metadata_collection:List[Dict[str, Dict]]) -> Dict[str, Any]:
     """
     Generates an explanation from previously collected metadata.
     
-    :param metadata_collection: Dictionary of metadata collected per code version.
+    :param metadata_collection: List of dictionary of metadata collected per code version per cycle.
     :returns: Dictionary containing explanation elements.
     """
     explanation = {}
     ties = get_module_ties(metadata_collection)
     confidences = get_module_confidences(metadata_collection, ties)
     
-    for module in metadata_collection['']['Available Modules']:
-        explanation[module]['Confidence'] = confidences[module] if module != '' else 1
-        explanation[module]['Ties'] = ties[module] if module != '' else {}
-        if module in metadata_collection['']['Used Modules']:
-            explanation[module]['Alternative Code'] = metadata_collection[module]['Alternative Code']
+    for module in metadata_collection[0]['']['Available Modules']:
+        explanation_for_module = {}
+        explanation_for_module['Confidence'] = confidences[module] if module != '' else 1
+        explanation_for_module['Ties'] = ties[module] if module != '' else {}
+        if module in metadata_collection[0]['']['Used Modules']:
+            explanation_for_module['Alternative Code'] = [metadata_collection[cycle][module]['Alternative Code'] for cycle in range(len(metadata_collection))]
         else:
-            explanation[module]['Alternative Code'] = ''
+            explanation_for_module['Alternative Code'] = ['' for cycle in range(len(metadata_collection))]
+        explanation[module] = explanation_for_module
 
     return explanation
 
@@ -117,11 +123,12 @@ def get_recommendation(explanation:Dict[str, Any], threshold:float) -> List[str]
     :param threshold: Confidence threshold below which to cut modules.
     :returns: Name of the module recommendet to cut.
     """
-    used = identify_used_modules(explanation['']['Alternative Code'])
-    not_used = [module for module in explanation if module != '' and module not in used]
-    threshold = np.max([explanation[module]['Confidence'] for module in not_used])
-    below_threshold = [module for module in used if explanation[module]['Confidence'] < threshold]
-    return below_threshold
+    return []
+    #used = identify_used_modules(explanation['']['Alternative Code'])
+    #not_used = [module for module in explanation if module != '' and module not in used]
+    #threshold = np.max([explanation[module]['Confidence'] for module in not_used])
+    #below_threshold = [module for module in used if explanation[module]['Confidence'] < threshold]
+    #return below_threshold
 
 
 def save_explanation(explanation:Dict[str, Any], filename: str = 'explanation') -> None:
