@@ -42,8 +42,8 @@ def get_module_confidences(metadata_collection:List[Dict[str, Dict]], ties:Dict[
     
     for cycle in range(len(metadata_collection)):
         for module in modules:
-            num_occurences = sum([1 if module in metadata['Used Modules'] or module == other_module else 0 for other_module, metadata in metadata_collection[cycle].items()])
-            confidences[module] += num_occurences/(len(metadata_collection))
+            num_occurences = sum([1 if module in metadata['Used Modules'] else 0 for other_module, metadata in metadata_collection[cycle].items()])
+            confidences[module] += num_occurences/(len(metadata_collection[cycle]) - (1 if module in metadata_collection[cycle]['']['Used Modules'] else 0))
     for module in confidences: 
         confidences[module] /= len(metadata_collection)
 
