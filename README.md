@@ -1,31 +1,13 @@
-Current idea for Explainability approach:
-1. Generate code C_0 for some question via ViperGPT
-2. Calculate and save score for C_0
-3. Get list M of all modules used in C_0
-4. For every module m in M:
-	5. Generate new code C_m without m via ViperGPT 
-	6. Calculate and save score for C_m
-7. Choose m for which score is maximized (can be None)
-
-For full automation:
-8. Repeat from step 1 without that m
-
-Score is calculated from ties between modules and confidence.
-
-
-Rough thesis outline:
-- Literature Review for actionable explainability methods applicable to ViperGPT
-- Choose method to calculate score for this approach
-- Implement and test approach
-- Analyse and compare results to base-ViperGPT and the AdaCoder extension
-
-
 TODO:
+- validate fidelity and distinctiveness of Confidence and Ties via what we already know about modules
+  - RefCOCO should have 'find' at roughly 100% Confidence, way higher than any other module (based on examples)
+  - GQA should have 'bool_to_yesno' have very high Ties with 'verify_property', 'exist', etc. (requires boolean input, these give boolean answers)
 - Test approach on GQA, RefCOCO and OK-VQA
-  - Test for accuracy improvement
+  - Analyze correlation between confidence and accuracy 
+  - Test for accuracy improvement via module selection
   - Get confidence and ties statistics for different modules
-- Verbalize approach
-- fine-tune first three chapters of the thesis 
+- Verbalize approach in chapter 4
+- Add more examples to chapter 3 
 
 Note:
 analysis_code contains code used for conducting the evaluation.
