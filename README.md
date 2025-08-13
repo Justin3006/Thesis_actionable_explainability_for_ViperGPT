@@ -1,5 +1,6 @@
 TODO:
 - validate fidelity and distinctiveness of Confidence and Ties via what we already know about modules
+  - Test that results are consistent between mutiple explanations for the same instance.
   - RefCOCO should have 'find' at roughly 100% Confidence, way higher than any other module (based on examples)
   - GQA should have 'bool_to_yesno' have very high Ties with 'verify_property', 'exist', etc. (requires boolean input, these give boolean answers)
 - Test approach on GQA, RefCOCO and OK-VQA

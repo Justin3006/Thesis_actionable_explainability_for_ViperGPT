@@ -43,7 +43,11 @@ def get_module_confidences(metadata_collection:List[Dict[str, Dict]], ties:Dict[
     for cycle in range(len(metadata_collection)):
         for module in modules:
             num_occurences = sum([1 if module in metadata['Used Modules'] else 0 for other_module, metadata in metadata_collection[cycle].items()])
-            confidences[module] += num_occurences/(len(metadata_collection[cycle]) - (1 if module in metadata_collection[cycle]['']['Used Modules'] else 0))
+            try:
+                confidences[module] += num_occurences/(len(metadata_collection[cycle]) - (1 if module in metadata_collection[cycle] else 0))
+            except:
+                print(module)
+                print(metadata_collection[cycle]['']['Used Modules'])
     for module in confidences: 
         confidences[module] /= len(metadata_collection)
 
@@ -59,18 +63,21 @@ def get_module_ties(metadata_collection:List[Dict[str, Dict]]) -> Dict[str, Dict
     """
     modules = metadata_collection[0]['']['Available Modules']
     ties = {module:{other_module:0 for other_module in modules} for module in modules}
+    relevant_cycles = {module:0 for module in modules}
     
     for cycle in range(len(metadata_collection)):
         for module in modules:
             num_occurences = sum([1 if module in metadata['Used Modules'] else 0 for m, metadata in metadata_collection[cycle].items()])
             if num_occurences > 0:
+                relevant_cycles[module] += 1
                 for other_module in modules:
                     num_sim_occurences = sum([1 if module in metadata['Used Modules'] and other_module in metadata['Used Modules'] else 0 for m, metadata in metadata_collection[cycle].items()])
                     ties[module][other_module] += num_sim_occurences/num_occurences
                     
     for module in modules:
-        for other_module in modules:
-            ties[module][other_module] /= len(metadata_collection)
+        if relevant_cycles[module] != 0:
+            for other_module in modules:
+                ties[module][other_module] /= relevant_cycles[module]
 
     return ties
 

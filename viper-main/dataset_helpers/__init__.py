@@ -20,6 +20,11 @@ def get_dataset(config_dataset):
         dataset = GQADataset(**config_dataset,
                              balanced=True,
                              image_transforms=transforms.Compose([transforms.ToTensor()]))
+    elif dataset_name == 'GQA_REPITITION':
+        from  dataset_helpers.gqa_repetition import GQADataset
+        dataset = GQADataset(**config_dataset,
+                             balanced=True,
+                             image_transforms=transforms.Compose([transforms.ToTensor()]))
     elif dataset_name == 'OKVQA':
         from  dataset_helpers.okvqa import OKVQADataset
         dataset = OKVQADataset(**config_dataset,
