@@ -124,16 +124,10 @@ def get_recommendation(explanation:Dict[str, Any], threshold:float) -> List[str]
     :param threshold: Confidence threshold below which to cut modules.
     :returns: Name of the module recommendet to cut.
     """
-    #return []
-    print(1)
     used = [module for module, explanation_for_module in explanation.items() if explanation_for_module['Alternative Code'][0] != '']
-    print(2)
     not_used = [module for module in explanation if module != '' and module not in used]
-    print(3)
     threshold = np.max([explanation[module]['Confidence'] for module in not_used])
-    print(4)
     below_threshold = [module for module in used if explanation[module]['Confidence'] < threshold]
-    print(5)
     return below_threshold
 
 

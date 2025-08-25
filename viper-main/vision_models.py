@@ -1214,70 +1214,68 @@ class CodexModel(BaseModel):
         #########################
         ###   AUTO-IMPROVE
         #########################
+        alt_result = [r for r in result]    
         if auto_improve_threshold > 0:
             import explainer
-            for i in range(len(result)):
-                for j in range(10):
-                    # Find improvement recommendation.
-                    code_0 = result[i]
-                    used_modules_0 = explainer.identify_used_modules(code_0, all_modules)
+            for i in range(len(alt_result)):
+                # Find improvement recommendation.
+                code_0 = alt_result[i]
+                used_modules_0 = explainer.identify_used_modules(code_0, all_modules)
                 
-                    required_perturbation_cycles = int(least_perturbations / (len(used_modules_0)+1)) + 1
-                    metadata_collection = [{} for cycle in range(required_perturbation_cycles)]
-                    
-                    # Repeat for full prompt.
+                required_perturbation_cycles = int(least_perturbations / (len(used_modules_0)+1)) + 1
+                metadata_collection = [{} for cycle in range(required_perturbation_cycles)]
+                
+                # Repeat for full prompt.
+                for cycle in range(required_perturbation_cycles):
+                    code_0 = self.forward_(extended_prompt, temperature=temperature)[0]
+                    used_modules = explainer.identify_used_modules(code_0, all_modules)
+                    metadata_collection[cycle][''] = explainer.gather_metadata(code_0, all_modules, used_modules)
+                
+                # Repeat for reduced prompts.
+                for module in used_modules_0:
+                    reduced_modules = all_modules.copy()
+                    reduced_modules.remove(module)
+                    reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
+                    reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
+
+                    if isinstance(prompt, list):
+                        extended_prompt_alt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
+                                           replace('INSERT_TYPE_HERE', input_type).
+                                           replace('EXTRA_CONTEXT_HERE', extra_context[i])]
+                    elif isinstance(prompt, str):
+                        extended_prompt_alt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
+                                           replace('INSERT_TYPE_HERE', input_type).
+                                           replace('EXTRA_CONTEXT_HERE', extra_context)]
+
                     for cycle in range(required_perturbation_cycles):
-                        code_0 = self.forward_(extended_prompt, temperature=temperature)[0]
-                        used_modules = explainer.identify_used_modules(code_0, all_modules)
-                        metadata_collection[cycle][''] = explainer.gather_metadata(code_0, all_modules, used_modules)
+                        code_m = self.forward_(extended_prompt_alt, temperature=temperature)[0]
+                        used_modules = explainer.identify_used_modules(code_m, all_modules)
+                        metadata_collection[cycle][module] = explainer.gather_metadata(code_m, reduced_modules, used_modules)
                 
-                    # Repeat for reduced prompts.
-                    for module in used_modules_0:
-                        reduced_modules = all_modules.copy()
+                explanation = explainer.generate_explanation(metadata_collection)
+                explainer.save_explanation(explanation)
+                recommendation = explainer.get_recommendation(explanation, auto_improve_threshold)
+                
+                # Return improved code.
+                if len(recommendation) >= 1:
+                    reduced_modules = all_modules.copy()
+
+                    for module in recommendation:
                         reduced_modules.remove(module)
                         reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
                         reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
-
-                        if isinstance(prompt, list):
-                            extended_prompt_alt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
-                                               replace('INSERT_TYPE_HERE', input_type).
-                                               replace('EXTRA_CONTEXT_HERE', extra_context[i])]
-                        elif isinstance(prompt, str):
-                            extended_prompt_alt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
-                                               replace('INSERT_TYPE_HERE', input_type).
-                                               replace('EXTRA_CONTEXT_HERE', extra_context)]
-
-                        for cycle in range(required_perturbation_cycles):
-                            code_m = self.forward_(extended_prompt_alt, temperature=temperature)[0]
-                            used_modules = explainer.identify_used_modules(code_m, all_modules)
-                            metadata_collection[cycle][module] = explainer.gather_metadata(code_m, reduced_modules, used_modules)
-                
-                    explanation = explainer.generate_explanation(metadata_collection)
-                    explainer.save_explanation(explanation)
-                    recommendation = explainer.get_recommendation(explanation, auto_improve_threshold)
-                    print(6)
                     
-                    # Return improved code.
-                    if len(recommendation) >= 1:
-                        reduced_modules = all_modules.copy()
-
-                        for module in recommendation:
-                            reduced_modules.remove(module)
-                            reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
-                            reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
-                        print(7)
-                        if isinstance(prompt, list):
-                            extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
-                                               replace('INSERT_TYPE_HERE', input_type).
-                                               replace('EXTRA_CONTEXT_HERE', extra_context[i])]
-                        elif isinstance(prompt, str):
-                            extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
-                                               replace('INSERT_TYPE_HERE', input_type).
-                                               replace('EXTRA_CONTEXT_HERE', extra_context)]
-                        print(8)
-                        result[i] = self.forward_(extended_prompt)[0]
-        print(9)
-        return result
+                    if isinstance(prompt, list):
+                        extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
+                                           replace('INSERT_TYPE_HERE', input_type).
+                                           replace('EXTRA_CONTEXT_HERE', extra_context[i])]
+                    elif isinstance(prompt, str):
+                        extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
+                                           replace('INSERT_TYPE_HERE', input_type).
+                                           replace('EXTRA_CONTEXT_HERE', extra_context)]
+                    
+                    alt_result[i] = self.forward_(extended_prompt)[0]
+        return result, alt_result
 
     def forward_(self, extended_prompt, temperature=0):
         if len(extended_prompt) > self.max_batch_size:
