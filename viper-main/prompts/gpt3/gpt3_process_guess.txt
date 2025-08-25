@@ -1,3 +1,4 @@
+[INST]
 Please answer the following questions using the given guesses.
 If a unique answer cannot be determined, choose only one of the possible answers.
 Aim to reply in ONE word (at MOST 2).
@@ -119,3 +120,4 @@ Question: {}
 Guess 1: {}
 Guess 2: {}
 Answer (remember, only 1-2 words):
+[/INST]

@@ -7,6 +7,7 @@ process(name, *args, **kwargs), where *args and **kwargs are the arguments of th
 import abc
 import backoff
 import contextlib
+import numpy as np
 import openai
 import os
 import re
@@ -1024,7 +1025,9 @@ class LlamaModel(BaseModel):
                 # In case only one option is given as a guess
                 guess1 = [guess1[0], guess1[0]]
             prompts_total.append(prompt_base.format(question, guess1[0], guess1[1]))
-        response = self.query_llama(prompts_total)
+        llama_prompt = "### Instruction:\n{}\n\n### Response:\n".format(prompts_total[0])
+        print(llama_prompt)
+        response = self.query_llama(llama_prompt)
         return response
 
     def get_qa(self, prompts, prompt_base: str = None) -> list[str]:
@@ -1034,30 +1037,35 @@ class LlamaModel(BaseModel):
         for p in prompts:
             question = p
             prompts_total.append(prompt_base.format(question))
-        response = self.query_llama(prompts_total)
+        llama_prompt = "### Instruction:\n{}\n\n### Response:\n".format(prompts_total[0])
+        print(llama_prompt)
+        response = self.query_llama(llama_prompt)
         return response
 
     def get_general(self, prompts) -> list[str]:
-        response = self.query_llama(prompts, model=self.model, max_tokens=256, top_p=1, frequency_penalty=0,
-                                   presence_penalty=0)
+        llama_prompt = "### Instruction:\n{}\n\n### Response:\n".format(prompts)
+        print(llama_prompt)
+        response = self.query_llama(llama_prompt)
         return response
 
     def query_llama(self, prompt):
         #response = self.pipeline(prompt)
-        inputs = self.tokenizer(prompt)
-        outputs = self.model.generate(inputs['input_ids']) 
+        input_ids = self.tokenizer.apply_chat_template(prompt, tokenize=True, add_generation_prompt=True, return_tensors="pt")['input_ids']
+        #input_ids = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)['input_ids']
+        generated_ids = self.model.generate(input_ids.to("cuda"), max_new_tokens=256, eos_token_id=self.tokenizer.eos_token_id) 
+        outputs = generated_ids[:, input_ids.shape[-1]:]
         response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
         return response
 
     def forward(self, prompt, process_name):
         if not self.to_batch:
             prompt = [prompt]
-
+        
         if process_name == 'llama_qa':
             # if items in prompt are tuples, then we assume it is a question and context
             if isinstance(prompt[0], tuple) or isinstance(prompt[0], list):
                 prompt = [question.format(context) for question, context in prompt]
-
+        
         to_compute = None
         results = []
         # Check if in cache
@@ -1069,7 +1077,7 @@ class LlamaModel(BaseModel):
                 results.append(result)  # If in cache, will be actual result, otherwise None
             to_compute = [i for i, r in enumerate(results) if r is None]
             prompt = [prompt[i] for i in to_compute]
-
+            
         if len(prompt) > 0:
             if process_name == 'llama_qa':
                 response = self.get_qa(prompt)
@@ -1079,7 +1087,8 @@ class LlamaModel(BaseModel):
                 response = self.get_general(prompt)
         else:
             response = []  # All previously cached
-
+        print(1)
+        print(response)
         if config.use_cache:
             for p, r in zip(prompt, response):
                 # "call" forces the overwrite of the cache
@@ -1088,9 +1097,12 @@ class LlamaModel(BaseModel):
                 results[idx] = response[i]
         else:
             results = response
-
-        if not self.to_batch:
+        print(2)
+        print(results)
+        if not self.to_batch and not type(results) is str:
             results = results[0]
+        print(3)
+        print(results)
         return results
 
     @classmethod
@@ -1166,7 +1178,7 @@ class CodexModel(BaseModel):
             with open(config.fixed_code_file) as f:
                 self.fixed_code = f.read()
 
-    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[], auto_improve_threshold=0, least_perturbations=10):
+    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[], auto_improve_threshold=0, least_perturbations=10, temperature=0.05):
         if config.use_fixed_code:  # Use the same program for every sample, like in socratic models
             return [self.fixed_code] * len(prompt) if isinstance(prompt, list) else self.fixed_code
 
@@ -1203,104 +1215,71 @@ class CodexModel(BaseModel):
         ###   AUTO-IMPROVE
         #########################
         if auto_improve_threshold > 0:
-            
             import explainer
             for i in range(len(result)):
-                # Find improvement recommendation.
-                code_0 = result[i]
-                used_modules = explainer.identify_used_modules(code_0, all_modules)
+                for j in range(10):
+                    # Find improvement recommendation.
+                    code_0 = result[i]
+                    used_modules_0 = explainer.identify_used_modules(code_0, all_modules)
                 
-                required_perturbation_cycles = int(least_perturbations / (len(used_modules)+1)) + 1
-                metadata_collection = [{} for cycle in range(required_perturbation_cycles)]
-                
-                # Repeat for full prompt.
-                for cycle in range(required_perturbation_cycles):
-                    code_0 = self.forward_(extended_prompt)[0]
-                    used_modules = explainer.identify_used_modules(code_0, all_modules)
-                    metadata_collection[cycle][''] = explainer.gather_metadata(code_0, all_modules, used_modules)
-                
-                # Repeat for reduced prompts.
-                for module in metadata_collection[0]['']['Used Modules']:
-                    reduced_modules = all_modules.copy()
-                    reduced_modules.remove(module)
-                    reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
-                    reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
-
-                    if isinstance(prompt, list):
-                        extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
-                                           replace('INSERT_TYPE_HERE', input_type).
-                                           replace('EXTRA_CONTEXT_HERE', extra_context[i])]
-                    elif isinstance(prompt, str):
-                        extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
-                                           replace('INSERT_TYPE_HERE', input_type).
-                                           replace('EXTRA_CONTEXT_HERE', extra_context)]
+                    required_perturbation_cycles = int(least_perturbations / (len(used_modules_0)+1)) + 1
+                    metadata_collection = [{} for cycle in range(required_perturbation_cycles)]
                     
+                    # Repeat for full prompt.
                     for cycle in range(required_perturbation_cycles):
-                        code_m = self.forward_(extended_prompt)[0]
-                        used_modules = explainer.identify_used_modules(code_m, all_modules)
-                        metadata_collection[cycle][module] = explainer.gather_metadata(code_m, reduced_modules, used_modules)
+                        code_0 = self.forward_(extended_prompt, temperature=temperature)[0]
+                        used_modules = explainer.identify_used_modules(code_0, all_modules)
+                        metadata_collection[cycle][''] = explainer.gather_metadata(code_0, all_modules, used_modules)
                 
-                explanation = explainer.generate_explanation(metadata_collection)  
-                explainer.save_explanation(explanation)
-                recommendation = explainer.get_recommendation(explanation, auto_improve_threshold)
-                
-                # Return improved code.
-                if len(recommendation) == 1:
-                    result[i] = explanation[recommendation[0]]['Alternative Code'][0]
-                
-                elif len(recommendation) > 1:
-                    reduced_modules = all_modules.copy()
-                    
-                    for module in recommendation:
+                    # Repeat for reduced prompts.
+                    for module in used_modules_0:
+                        reduced_modules = all_modules.copy()
                         reduced_modules.remove(module)
                         reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
                         reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
 
-                    if isinstance(prompt, list):
-                        extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
-                                           replace('INSERT_TYPE_HERE', input_type).
-                                           replace('EXTRA_CONTEXT_HERE', extra_context[i])]
-                    elif isinstance(prompt, str):
-                        extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
-                                           replace('INSERT_TYPE_HERE', input_type).
-                                           replace('EXTRA_CONTEXT_HERE', extra_context)]
+                        if isinstance(prompt, list):
+                            extended_prompt_alt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
+                                               replace('INSERT_TYPE_HERE', input_type).
+                                               replace('EXTRA_CONTEXT_HERE', extra_context[i])]
+                        elif isinstance(prompt, str):
+                            extended_prompt_alt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
+                                               replace('INSERT_TYPE_HERE', input_type).
+                                               replace('EXTRA_CONTEXT_HERE', extra_context)]
+
+                        for cycle in range(required_perturbation_cycles):
+                            code_m = self.forward_(extended_prompt_alt, temperature=temperature)[0]
+                            used_modules = explainer.identify_used_modules(code_m, all_modules)
+                            metadata_collection[cycle][module] = explainer.gather_metadata(code_m, reduced_modules, used_modules)
+                
+                    explanation = explainer.generate_explanation(metadata_collection)
+                    explainer.save_explanation(explanation)
+                    recommendation = explainer.get_recommendation(explanation, auto_improve_threshold)
+                    print(6)
                     
-                    result[i] = self.forward_(extended_prompt)[0]
+                    # Return improved code.
+                    if len(recommendation) >= 1:
+                        reduced_modules = all_modules.copy()
+
+                        for module in recommendation:
+                            reduced_modules.remove(module)
+                            reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
+                            reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
+                        print(7)
+                        if isinstance(prompt, list):
+                            extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
+                                               replace('INSERT_TYPE_HERE', input_type).
+                                               replace('EXTRA_CONTEXT_HERE', extra_context[i])]
+                        elif isinstance(prompt, str):
+                            extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
+                                               replace('INSERT_TYPE_HERE', input_type).
+                                               replace('EXTRA_CONTEXT_HERE', extra_context)]
+                        print(8)
+                        result[i] = self.forward_(extended_prompt)[0]
+        print(9)
         return result
 
-    def forward_(self, extended_prompt):
-        if len(extended_prompt) > self.max_batch_size:
-            response = []
-            for i in range(0, len(extended_prompt), self.max_batch_size):
-                response += self.forward_(extended_prompt[i:i + self.max_batch_size])
-            return response
-        try:
-            response = codex_helper(extended_prompt)
-        except openai.error.RateLimitError as e:
-            print("Retrying Codex, splitting batch")
-            if len(extended_prompt) == 1:
-                warnings.warn("This is taking too long, maybe OpenAI is down? (status.openai.com/)")
-            # Will only be here after the number of retries in the backoff decorator.
-            # It probably means a single batch takes up the entire rate limit.
-            sub_batch_1 = extended_prompt[:len(extended_prompt) // 2]
-            sub_batch_2 = extended_prompt[len(extended_prompt) // 2:]
-            if len(sub_batch_1) > 0:
-                response_1 = self.forward_(sub_batch_1)
-            else:
-                response_1 = []
-            if len(sub_batch_2) > 0:
-                response_2 = self.forward_(sub_batch_2)
-            else:
-                response_2 = []
-            response = response_1 + response_2
-        except Exception as e:
-            # Some other error like an internal OpenAI error
-            print("Retrying Codex")
-            print(e)
-            response = self.forward_(extended_prompt)
-        return response
-
-    def forward_(self, extended_prompt):
+    def forward_(self, extended_prompt, temperature=0):
         if len(extended_prompt) > self.max_batch_size:
             response = []
             for i in range(0, len(extended_prompt), self.max_batch_size):
@@ -1386,9 +1365,10 @@ class CodeLlama(CodexModel):
         )
         self.model.eval()
 
-    def run_codellama(self, prompt):
+    def run_codellama(self, prompt, temperature=0):
+        do_sample = temperature > 0
         input_ids = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)["input_ids"]
-        generated_ids = self.model.generate(input_ids.to("cuda"), max_new_tokens=256)
+        generated_ids = self.model.generate(input_ids.to("cuda"), max_new_tokens=256, temperature=temperature, do_sample=do_sample)
         generated_ids = generated_ids[:, input_ids.shape[-1]:]
         generated_text = [self.tokenizer.decode(gen_id, skip_special_tokens=True) for gen_id in generated_ids]
         start = "[CODE]"
@@ -1399,14 +1379,14 @@ class CodeLlama(CodexModel):
                           for text in generated_text]
         return generated_text
 
-    def forward_(self, extended_prompt):
+    def forward_(self, extended_prompt, temperature=0):
         if len(extended_prompt) > self.max_batch_size:
             response = []
             for i in range(0, len(extended_prompt), self.max_batch_size):
                 response += self.forward_(extended_prompt[i:i + self.max_batch_size])
             return response
         with torch.no_grad():
-            response = self.run_codellama(extended_prompt)
+            response = self.run_codellama(extended_prompt, temperature)
         # Clear GPU memory
         torch.cuda.empty_cache()
         return response

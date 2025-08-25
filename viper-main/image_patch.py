@@ -435,7 +435,7 @@ def llm_query(query, context=None, long_answer=True, queues=None):
 
 
 def process_guesses(prompt, guess1=None, guess2=None, queues=None):
-    return forward(model_name='gpt3_guess', prompt=[prompt, guess1, guess2], queues=queues)
+    return forward(model_name='llama_guess', prompt=[prompt, guess1, guess2], queues=queues)
 
 
 def coerce_to_numeric(string, no_string=False):

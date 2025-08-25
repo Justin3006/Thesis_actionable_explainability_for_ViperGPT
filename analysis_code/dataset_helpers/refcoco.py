@@ -31,7 +31,7 @@ class RefCOCODataset(Dataset):
 
         self.dataset = datasets.load_dataset('lmms-lab/' + repo_id)[split]
         if max_samples is not None:
-            self.dataset = self.samples[:max_samples]
+            self.dataset = self.dataset.select(range(1000))
 
         """
         # load refs from data/dataset/refs(dataset).json

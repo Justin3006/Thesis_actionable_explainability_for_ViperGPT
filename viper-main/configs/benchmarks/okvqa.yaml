@@ -3,7 +3,7 @@ dataset:
     dataset_name: OKVQA
     split: test
     testing: False
-    max_samples:
+    max_samples: 1000
     batch_size: 20
     start_sample: 0
 
@@ -23,6 +23,7 @@ load_models:
     llama_list: True
     llama_qa: True
     llama_general: True
+    llama_guess: True
     depth: False
     blip: True
     saliency: False
