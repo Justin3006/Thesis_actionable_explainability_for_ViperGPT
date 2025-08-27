@@ -132,11 +132,11 @@ def get_recommendation(explanation:Dict[str, Any], threshold:float=0, mode:str='
         case 'nonZero':
             recommendation = [module for module in explanation if explanation[module]['Confidence'] == 0]
         case 'naive':
+            recommendation = [module for module in explanation if explanation[module]['Confidence'] <= threshold]
+        case 'constrained':
             above_threshold = [module for module in explanation if explanation[module]['Confidence'] > threshold]
             recommendation = [module for module in explanation if explanation[module]['Confidence'] <= threshold 
                               and len([explanation[other]['Ties'][module] >= 0.5 for other in above_threshold]) == 0]
-        case 'constrained':
-            recommendation = [module for module in explanation if explanation[module]['Confidence'] <= threshold]
         case 'adaptive':
             threshold = np.max([explanation[module]['Confidence'] for module in not_used])
             recommendation = [module for module in explanation if explanation[module]['Confidence'] < threshold]
