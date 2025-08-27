@@ -7,29 +7,27 @@ from scipy.stats import median_abs_deviation
 import seaborn as sns
 import matplotlib.pyplot as plt
 from collections import defaultdict
+import tkinter as tk
+from tkinter import filedialog
 
 
-def calculate_statistics(filename: str = "explanans.json") -> None:
+def calculate_statistics(path:str) -> None:
     """
     Loads the explanans json file and calculates some statistics for it.
     
-    :param filename: Name of the file to load.
+    :param path: Name of the dictionary containing the files to use.
     """
-    with open(filename, 'r') as f:
+    with open(path + "/explanations.json", 'r') as f:
         data = json.load(f)
         
-    # ###############
-    #  Confidences
-    # ###############
+    # Confidences
     mean_confidence_per_module = {}
     for module, explanations in data.items():
         mean_confidence_per_module[module] = np.mean([explanation['Confidence'] for explanation in explanations if explanation['Confidence'] != 0 and explanation['Alternative Code'][0] != ''])
     print("Confidences: ")
     print(mean_confidence_per_module)
     
-    # ###############
-    #  Ties
-    # ###############
+    # Ties
     mean_ties_per_module = {}
     for module, explanations in data.items():
         mean_ties = {}
@@ -55,16 +53,15 @@ def calculate_statistics(filename: str = "explanans.json") -> None:
     plt.show()
 
 
-def calculate_correlation(filename_results = 'results.csv', filename_explanations = 'explanation.json') -> None:
+def calculate_correlation(path:str) -> None:
     """
     Calculates correlation betweem accuracy and confidence.
     
-    :param filename_results: Name of the results file to load.
-    :param filename_explanations: Name of the explanation file to load.
+    :param path: Name of the dictionary containing the files to use.
     """
-    data_results_df = pd.read_csv(filename_results)
+    data_results_df = pd.read_csv(path + "/results.csv")
     
-    with open(filename_explanations, 'r') as f:
+    with open(path + "/explanations.json", 'r') as f:
         data_explanations_dict = json.load(f)
         
     import dataset_helpers
@@ -111,17 +108,6 @@ def calculate_correlation(filename_results = 'results.csv', filename_explanation
             mean_confidence_alt_per_result.append(mean_confidence_alt)
             min_confidence_alt_per_result.append(min_confidence_alt)
             max_confidence_alt_per_result.append(max_confidence_alt)
-            
-            """
-            confidences_diff = [explanations[i]['Confidence'] for module, explanations in data_explanations_dict.items() if explanations[i]['Alternative Code'][0] == '']
-            mean_confidence_diff = np.mean(confidences_alt)
-            min_confidence_diff = np.min(confidences_alt)
-            max_confidence_diff = np.max(confidences_alt)
-           
-            mean_confidence_per_result.append(mean_confidence_alt)
-            min_confidence_per_result.append(min_confidence_alt)
-            max_confidence_per_result.append(max_confidence_alt)
-            """
         else:
             invalid.append(i)
             
@@ -156,66 +142,16 @@ def calculate_correlation(filename_results = 'results.csv', filename_explanation
     plt.savefig("MinConfidenceCorrelation.pdf")
     plt.show()
     
-    """
-    df = pd.DataFrame({
-        'Max Confidence': max_confidence_per_result,
-        'Correctness': ["Correct" if value else "Incorrect" for value in correctness_values]
-    })
-    sns.boxplot(y='Max Confidence', x='Correctness', data=df)
-    plt.ylabel('Max Confidence of Used Modules')
-    plt.xlabel('')
-    plt.title('Max Confidence by Correctness')
-    plt.savefig("MaxConfidenceCorrelation.pdf")
-    plt.show()
-    
-    print(pointbiserialr(mean_confidence_alt_per_result, correctness_values))
-    print(pointbiserialr(min_confidence_alt_per_result, correctness_values))
-    print(pointbiserialr(max_confidence_alt_per_result, correctness_values))
 
-    df = pd.DataFrame({
-        'Mean Confidence': mean_confidence_alt_per_result,
-        'Correctness': ["Correct" if value else "Incorrect" for value in correctness_values]
-    })
-    sns.boxplot(y='Mean Confidence', x='Correctness', data=df)
-    plt.ylabel('Mean Confidence of Used Modules')
-    plt.xlabel('')
-    plt.title('Mean Confidence by Correctness')
-    plt.savefig("MeanConfidenceCorrelation.pdf")
-    plt.show()
-    
-    df = pd.DataFrame({
-        'Min Confidence': min_confidence_alt_per_result,
-        'Correctness': ["Correct" if value else "Incorrect" for value in correctness_values]
-    })
-    sns.boxplot(y='Min Confidence', x='Correctness', data=df)
-    plt.ylabel('Minimum Confidence of Used Modules')
-    plt.xlabel('')
-    plt.title('Min Confidence by Correctness')
-    plt.savefig("MinConfidenceCorrelation.pdf")
-    plt.show()
-    
-    df = pd.DataFrame({
-        'Max Confidence': max_confidence_alt_per_result,
-        'Correctness': ["Correct" if value else "Incorrect" for value in correctness_values]
-    })
-    sns.boxplot(y='Max Confidence', x='Correctness', data=df)
-    plt.ylabel('Max Confidence of Used Modules')
-    plt.xlabel('')
-    plt.title('Max Confidence by Correctness')
-    plt.savefig("MaxConfidenceCorrelation.pdf")
-    plt.show()
-    """
-    
-
-def test_consistency(filename_explanations:str = 'explanation.json', explanations_per_sample:int = 10) -> None:
+def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
     """
     Calculates consistency of explanations.
     
-    :param filename_explanations: Name of the explanation file to load.
+    :param path: Name of the dictionary containing the files to use.
     :param explanations_per_samples: How many explanations are contained per sample in the file.
     """
     from scipy.stats import variation  # coefficient_of_variation
-    with open(filename_explanations, 'r') as f:
+    with open(path + "/explanations.json", 'r') as f:
         data_explanations_dict = json.load(f)
         
     number_of_samples = int(len(data_explanations_dict['find']) / explanations_per_sample)
@@ -287,7 +223,35 @@ def test_consistency(filename_explanations:str = 'explanation.json', explanation
     plt.show()
 
 
+def accuracy(path:str):
+    """
+    Calculates accuracy of given results file.
+    
+    :param path: Name of the dictionary containing the files to use.
+    """
+    data_results_df = pd.read_csv(path + "/results.csv")
+        
+    import dataset_helpers
+    results = [data_point["result"] for idx, data_point in data_results_df.iterrows()]
+    answers = [data_point["answer"] for idx, data_point in data_results_df.iterrows()]
+    accuracy = dataset_helpers.accuracy(results, answers)
+    print(accuracy)
+
+
+
 if __name__ == "__main__":
-    #calculate_statistics("explanation.json")
-    #calculate_correlation("results.csv", "explanation.json")
-    test_consistency("explanation(1).json")
+    path = filedialog.askdirectory(title="Choose working directory containing 'explanations.json' and 'results.csv'.")
+    root = tk.Tk()
+    root.geometry("300x300+50+50")
+    btns = []
+    def resetPath():
+        global path
+        path = filedialog.askdirectory(title="Choose working directory containing 'explanations.json' and 'results.csv'.")
+    btns.append(tk.Button(root, text="Reset Path", command=lambda:resetPath()))
+    btns.append(tk.Button(root, text="Stats", command=lambda:calculate_statistics(path)))
+    btns.append(tk.Button(root, text="Correlation", command=lambda:calculate_correlation(path)))
+    btns.append(tk.Button(root, text="Consistency", command=lambda:test_consistency(path)))
+    btns.append(tk.Button(root, text="Accuracy", command=lambda:accuracy(path)))
+    for btn in btns:
+        btn.pack(side=tk.TOP, pady=5)
+    root.mainloop()

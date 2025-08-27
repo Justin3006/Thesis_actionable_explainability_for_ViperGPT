@@ -1178,7 +1178,9 @@ class CodexModel(BaseModel):
             with open(config.fixed_code_file) as f:
                 self.fixed_code = f.read()
 
-    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], module_list_out=[], auto_improve_threshold=0, least_perturbations=10, temperature=0.05):
+    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], 
+                module_list_out=[], recommendation_threshold=0, least_perturbations=10, explainer_temperature=0.05, recommendation_mode='',
+                essential_modules=[]):
         if config.use_fixed_code:  # Use the same program for every sample, like in socratic models
             return [self.fixed_code] * len(prompt) if isinstance(prompt, list) else self.fixed_code
 
@@ -1211,23 +1213,26 @@ class CodexModel(BaseModel):
         if not isinstance(prompt, list):
             result = result[0]
         
-        #########################
-        ###   AUTO-IMPROVE
-        #########################
+        ###############################################################
+        ###              EXPLANATIONS
+        #######################ä#######################################
         alt_result = [r for r in result]    
-        if auto_improve_threshold > 0:
+        if least_perturbations > 0:
             import explainer
             for i in range(len(alt_result)):
                 # Find improvement recommendation.
                 code_0 = alt_result[i]
                 used_modules_0 = explainer.identify_used_modules(code_0, all_modules)
+                for module in used_modules_0:
+                    if module in essential_modules:
+                        used_modules_0.pop(module)
                 
                 required_perturbation_cycles = int(least_perturbations / (len(used_modules_0)+1)) + 1
                 metadata_collection = [{} for cycle in range(required_perturbation_cycles)]
                 
                 # Repeat for full prompt.
                 for cycle in range(required_perturbation_cycles):
-                    code_0 = self.forward_(extended_prompt, temperature=temperature)[0]
+                    code_0 = self.forward_(extended_prompt, temperature=explainer_temperature)[0]
                     used_modules = explainer.identify_used_modules(code_0, all_modules)
                     metadata_collection[cycle][''] = explainer.gather_metadata(code_0, all_modules, used_modules)
                 
@@ -1248,13 +1253,13 @@ class CodexModel(BaseModel):
                                            replace('EXTRA_CONTEXT_HERE', extra_context)]
 
                     for cycle in range(required_perturbation_cycles):
-                        code_m = self.forward_(extended_prompt_alt, temperature=temperature)[0]
+                        code_m = self.forward_(extended_prompt_alt, temperature=explainer_temperature)[0]
                         used_modules = explainer.identify_used_modules(code_m, all_modules)
                         metadata_collection[cycle][module] = explainer.gather_metadata(code_m, reduced_modules, used_modules)
                 
                 explanation = explainer.generate_explanation(metadata_collection)
                 explainer.save_explanation(explanation)
-                recommendation = explainer.get_recommendation(explanation, auto_improve_threshold)
+                recommendation = explainer.get_recommendation(explanation, recommendation_threshold, recommendation_mode)
                 
                 # Return improved code.
                 if len(recommendation) >= 1:

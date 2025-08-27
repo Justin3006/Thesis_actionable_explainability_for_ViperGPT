@@ -169,7 +169,9 @@ def main():
                 # TODO compute Codex for next batch as current batch is being processed
                 if not config.use_cached_codex:
                     codes, alt_codes = codex(prompt=batch['query'], base_prompt=base_prompt, input_type=input_type,
-                                      extra_context=batch['extra_context'], auto_improve_threshold=config.auto_improve)
+                                      extra_context=batch['extra_context'], recommendation_threshold=config.explainer.recommendation_threshold, 
+                                      least_perturbations=config.explainer.least_perutrbations, explainer_temperature=config.explainer.explainer_temperature, 
+                                      recommendation_mode=config.explainer.recommendation_mode, essential_modules=config.explainer.essential_modules)
 
                 else:
                     codes, alt_codes = codes_all[i * batch_size:(i + 1) * batch_size]  # If cache

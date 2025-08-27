@@ -1,6 +1,6 @@
 from importlib import metadata
 from typing import Dict, List, Any, Tuple
-#import main_simple_lib as viperGPT
+import main_simple_lib as viperGPT
 import numpy as np
 import json
 from configs import config
@@ -116,7 +116,7 @@ def generate_explanation(metadata_collection:List[Dict[str, Dict]]) -> Dict[str,
     return explanation
 
 
-def get_recommendation(explanation:Dict[str, Any], threshold:float) -> List[str]:
+def get_recommendation(explanation:Dict[str, Any], threshold:float=0, mode:str='') -> List[str]:
     """
     Recommends which module to cut if any.
     
@@ -124,14 +124,31 @@ def get_recommendation(explanation:Dict[str, Any], threshold:float) -> List[str]
     :param threshold: Confidence threshold below which to cut modules.
     :returns: Name of the module recommendet to cut.
     """
+    recommendation = []
     used = [module for module, explanation_for_module in explanation.items() if explanation_for_module['Alternative Code'][0] != '']
     not_used = [module for module in explanation if module != '' and module not in used]
-    threshold = np.max([explanation[module]['Confidence'] for module in not_used])
-    below_threshold = [module for module in used if explanation[module]['Confidence'] < threshold]
-    return below_threshold
+    
+    match mode:
+        case 'nonZero':
+            recommendation = [module for module in explanation if explanation[module]['Confidence'] == 0]
+        case 'naive':
+            above_threshold = [module for module in explanation if explanation[module]['Confidence'] > threshold]
+            recommendation = [module for module in explanation if explanation[module]['Confidence'] <= threshold 
+                              and len([explanation[other]['Ties'][module] >= 0.5 for other in above_threshold]) == 0]
+        case 'constrained':
+            recommendation = [module for module in explanation if explanation[module]['Confidence'] <= threshold]
+        case 'adaptive':
+            threshold = np.max([explanation[module]['Confidence'] for module in not_used])
+            recommendation = [module for module in explanation if explanation[module]['Confidence'] < threshold]
+        case 'constrainedAdaptive':
+            threshold = np.max([explanation[module]['Confidence'] for module in not_used])
+            recommendation = [module for module in explanation if explanation[module]['Confidence'] < threshold 
+                              and len([explanation[other]['Ties'][module] >= 0.5 for other in above_threshold]) == 0]
+
+    return recommendation
 
 
-def save_explanation(explanation:Dict[str, Any], filename: str = 'explanation') -> None:
+def save_explanation(explanation:Dict[str, Any], filename: str = 'explanations') -> None:
     """
     Save explanation in a json file.
     
@@ -164,26 +181,43 @@ def save_explanation(explanation:Dict[str, Any], filename: str = 'explanation') 
         json.dump(existing_data, f, indent=4)
 
 
-#def get_code_with_explanations(query:str, target:str) -> Tuple[str, Dict[str, Any]]:
-#    """
-#    Code generation variant that also generates explanations for the code.
-#    
-#    :param query: What query to generate code for.
-#    :param target: What you want to optimize for.
-#    :returns: Generated code, Dictionary containing explanation for the code, Module recommended to cut.
-#    """
-#    all_modules = []
-#    code_0 = viperGPT.get_code(query, module_list_out=all_modules)
-#    used_modules = identify_used_modules(code_0, all_modules)
-#    
-#    metadata_collection = {'': gather_metadata(code_0, all_modules, used_modules)}
-#    
-#    for module in used_modules.keys():
-#        reduced_modules = all_modules.copy()
-#        reduced_modules.remove(module)
-#        code_m = viperGPT.get_code(query, supressed_modules=[module])
-#        metadata_collection[module] = gather_metadata(code_m, reduced_modules, used_modules)
-#
-#    explanation = generate_explanation(metadata_collection)   
-#    recommendation = get_recommendation(explanation, target)
-#    return code_0, explanation, recommendation
+def get_code_with_explanations(query:str, target:str, least_perturbations:int=10, essential_modules:List[str]=[]) -> Tuple[str, Dict[str, Any]]:
+    """
+    Code generation variant that also generates explanations for the code.
+    
+    :param query: What query to generate code for.
+    :param target: What you want to optimize for.
+    :param least_perturbations: How many smaples to take.
+    :param essential_modules: What modules can not be perturbed.
+    :returns: Generated code, Dictionary containing explanation for the code, Module recommended to cut.
+    """
+    all_modules = []
+    code_0 = viperGPT.get_code(query, module_list_out=all_modules)
+    used_modules_0 = identify_used_modules(code_0, all_modules)
+    for module in used_modules_0:
+        if module in essential_modules:
+            used_modules_0.pop(module)
+
+    metadata_collection = {'': gather_metadata(code_0, all_modules, used_modules)}    
+    required_perturbation_cycles = int(least_perturbations / (len(used_modules_0)+1)) + 1
+    metadata_collection = [{} for cycle in range(required_perturbation_cycles)]
+    
+    # Repeat for full prompt.
+    for cycle in range(required_perturbation_cycles):
+        code_m = viperGPT.get_code(query, module_list_out=all_modules)
+        used_modules = identify_used_modules(code_m, all_modules)
+        metadata_collection[cycle][''] = gather_metadata(code_m, all_modules, used_modules)
+    
+    # Repeat for reduced prompts.
+    for module in used_modules_0:
+        reduced_modules = all_modules.copy()
+        reduced_modules.remove(module)
+        
+        for cycle in range(required_perturbation_cycles):
+            code_m = viperGPT.get_code(query, module_list_out=reduced_modules)
+            used_modules = identify_used_modules(code_m, reduced_modules)
+            metadata_collection[cycle][module] = gather_metadata(code_m, reduced_modules, used_modules)
+    
+    explanation = generate_explanation(metadata_collection)
+    recommendation = get_recommendation(explanation, 0)
+    return code_0, explanation, recommendation
