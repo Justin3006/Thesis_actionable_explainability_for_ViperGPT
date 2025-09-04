@@ -3,11 +3,17 @@ path_pretrained_models: './pretrained_models'       # Path to the pretrained mod
 execute_code: True                                  # Execute the code after generating it. Only applies to main_batch
 
 explainer:
-    recommendation_threshold: 50
-    recommendation_mode: 'nonZero'                  # 'nonZero', 'naive', 'constrained', 'adaptive', 'constrainedAdaptive'
-    least_perturbations: 10
-    explainer_temperature: 0.05
-    essential_modules: ['simple_query']
+    recommendation_threshold: 0.5                   # Confidence-Threshold in recommendations.
+    recommendation_threshold2: 0.5                  # Ties-Threshold in recommendations.
+    recommendation_mode: 'nonZero'                  # Recommendation strategy. ['nonZero', 'naive', 'constrained', 'adaptive', 'constrainedAdaptive']
+    least_perturbations: 10                         # How many samples to generate an explanation from.
+    explainer_temperature: 0.05                     # What temperature to use for generating code samples in explanations.
+    essential_modules: ['simple_query']             # What modules not to perturb.
+    filename: 'explanations.json'                   # What file to save gathered explanations in.
+
+collection:
+    code_samples: 10                                # Used for correlation tests. Normally 1.
+    explanation_samples: 1                          # Used for consistency tests. Normally 1.
 
 dataset:                                            # Dataset configuration
     dataset_name: 'MyDataset'                       # Dataset name

@@ -116,12 +116,13 @@ def generate_explanation(metadata_collection:List[Dict[str, Dict]]) -> Dict[str,
     return explanation
 
 
-def get_recommendation(explanation:Dict[str, Any], threshold:float=0, mode:str='') -> List[str]:
+def get_recommendation(explanation:Dict[str, Any], threshold:float=0, threshold2:float=0, mode:str='') -> List[str]:
     """
     Recommends which module to cut if any.
     
     :param explanation: Dictionary containing explanation for the code.
     :param threshold: Confidence threshold below which to cut modules.
+    :param threshold2: Ties threshold above which to still keep modules.
     :returns: Name of the module recommendet to cut.
     """
     recommendation = []
@@ -136,19 +137,19 @@ def get_recommendation(explanation:Dict[str, Any], threshold:float=0, mode:str='
         case 'constrained':
             above_threshold = [module for module in explanation if explanation[module]['Confidence'] > threshold]
             recommendation = [module for module in explanation if explanation[module]['Confidence'] <= threshold 
-                              and len([explanation[other]['Ties'][module] >= 0.5 for other in above_threshold]) == 0]
+                              and len([explanation[other]['Ties'][module] >= threshold2 for other in above_threshold]) == 0]
         case 'adaptive':
             threshold = np.max([explanation[module]['Confidence'] for module in not_used])
             recommendation = [module for module in explanation if explanation[module]['Confidence'] < threshold]
         case 'constrainedAdaptive':
             threshold = np.max([explanation[module]['Confidence'] for module in not_used])
             recommendation = [module for module in explanation if explanation[module]['Confidence'] < threshold 
-                              and len([explanation[other]['Ties'][module] >= 0.5 for other in above_threshold]) == 0]
+                              and len([explanation[other]['Ties'][module] >= threshold2 for other in above_threshold]) == 0]
 
     return recommendation
 
 
-def save_explanation(explanation:Dict[str, Any], filename: str = 'explanations') -> None:
+def save_explanation(explanation:Dict[str, Any], filename: str = 'explanations', query:str = '') -> None:
     """
     Save explanation in a json file.
     
@@ -165,6 +166,8 @@ def save_explanation(explanation:Dict[str, Any], filename: str = 'explanations')
                 existing_data = {}
     else:
         existing_data = {}
+
+    explanation['Query'] = query
 
     for key, value in explanation.items():
         if key in existing_data:

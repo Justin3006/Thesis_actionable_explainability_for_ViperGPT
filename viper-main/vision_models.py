@@ -1179,8 +1179,8 @@ class CodexModel(BaseModel):
                 self.fixed_code = f.read()
 
     def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None, supressed_modules=[], 
-                module_list_out=[], recommendation_threshold=0, least_perturbations=10, explainer_temperature=0.05, recommendation_mode='',
-                essential_modules=[]):
+                module_list_out=[], recommendation_threshold=0, recommendation_threshold2=0, least_perturbations=10, 
+                explainer_temperature=0.05, recommendation_mode='', essential_modules=[]):
         if config.use_fixed_code:  # Use the same program for every sample, like in socratic models
             return [self.fixed_code] * len(prompt) if isinstance(prompt, list) else self.fixed_code
 
@@ -1209,77 +1209,78 @@ class CodexModel(BaseModel):
         else:
             raise TypeError("prompt must be a string or a list of strings")
 
-        result = self.forward_(extended_prompt)
+        result = self.forward_(extended_prompt, temperature=config.codex.temperature)
         if not isinstance(prompt, list):
             result = result[0]
         
         ###############################################################
         ###              EXPLANATIONS
-        #######################ä#######################################
+        ###############################################################
         alt_result = [r for r in result]    
         if least_perturbations > 0:
             import explainer
             for i in range(len(alt_result)):
-                # Find improvement recommendation.
-                code_0 = alt_result[i]
-                used_modules_0 = explainer.identify_used_modules(code_0, all_modules)
-                for module in used_modules_0:
-                    if module in essential_modules:
-                        used_modules_0.pop(module)
-                
-                required_perturbation_cycles = int(least_perturbations / (len(used_modules_0)+1)) + 1
-                metadata_collection = [{} for cycle in range(required_perturbation_cycles)]
-                
-                # Repeat for full prompt.
-                for cycle in range(required_perturbation_cycles):
-                    code_0 = self.forward_(extended_prompt, temperature=explainer_temperature)[0]
-                    used_modules = explainer.identify_used_modules(code_0, all_modules)
-                    metadata_collection[cycle][''] = explainer.gather_metadata(code_0, all_modules, used_modules)
-                
-                # Repeat for reduced prompts.
-                for module in used_modules_0:
-                    reduced_modules = all_modules.copy()
-                    reduced_modules.remove(module)
-                    reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
-                    reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
-
-                    if isinstance(prompt, list):
-                        extended_prompt_alt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
-                                           replace('INSERT_TYPE_HERE', input_type).
-                                           replace('EXTRA_CONTEXT_HERE', extra_context[i])]
-                    elif isinstance(prompt, str):
-                        extended_prompt_alt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
-                                           replace('INSERT_TYPE_HERE', input_type).
-                                           replace('EXTRA_CONTEXT_HERE', extra_context)]
-
+                for repetition in range(config.collection.explanation_samples):
+                    # Find improvement recommendation.
+                    code_0 = alt_result[i]
+                    used_modules_0 = explainer.identify_used_modules(code_0, all_modules)
+                    for module in list(used_modules_0):
+                        if module in essential_modules:
+                            used_modules_0.pop(module)
+                    
+                    required_perturbation_cycles = int(least_perturbations / (len(used_modules_0)+1)) + 1
+                    metadata_collection = [{} for cycle in range(required_perturbation_cycles)]
+                    
+                    # Repeat for full prompt.
                     for cycle in range(required_perturbation_cycles):
-                        code_m = self.forward_(extended_prompt_alt, temperature=explainer_temperature)[0]
-                        used_modules = explainer.identify_used_modules(code_m, all_modules)
-                        metadata_collection[cycle][module] = explainer.gather_metadata(code_m, reduced_modules, used_modules)
-                
-                explanation = explainer.generate_explanation(metadata_collection)
-                explainer.save_explanation(explanation)
-                recommendation = explainer.get_recommendation(explanation, recommendation_threshold, recommendation_mode)
-                
-                # Return improved code.
-                if len(recommendation) >= 1:
-                    reduced_modules = all_modules.copy()
-
-                    for module in recommendation:
+                        code_0 = self.forward_(extended_prompt, temperature=explainer_temperature)[0]
+                        used_modules = explainer.identify_used_modules(code_0, all_modules)
+                        metadata_collection[cycle][''] = explainer.gather_metadata(code_0, all_modules, used_modules)
+                    
+                    # Repeat for reduced prompts.
+                    for module in used_modules_0:
+                        reduced_modules = all_modules.copy()
                         reduced_modules.remove(module)
                         reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
                         reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
+
+                        if isinstance(prompt, list):
+                            extended_prompt_alt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
+                                               replace('INSERT_TYPE_HERE', input_type).
+                                               replace('EXTRA_CONTEXT_HERE', extra_context[i])]
+                        elif isinstance(prompt, str):
+                            extended_prompt_alt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
+                                               replace('INSERT_TYPE_HERE', input_type).
+                                               replace('EXTRA_CONTEXT_HERE', extra_context)]
+
+                        for cycle in range(required_perturbation_cycles):
+                            code_m = self.forward_(extended_prompt_alt, temperature=explainer_temperature)[0]
+                            used_modules = explainer.identify_used_modules(code_m, all_modules)
+                            metadata_collection[cycle][module] = explainer.gather_metadata(code_m, reduced_modules, used_modules)
                     
-                    if isinstance(prompt, list):
-                        extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
-                                           replace('INSERT_TYPE_HERE', input_type).
-                                           replace('EXTRA_CONTEXT_HERE', extra_context[i])]
-                    elif isinstance(prompt, str):
-                        extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
-                                           replace('INSERT_TYPE_HERE', input_type).
-                                           replace('EXTRA_CONTEXT_HERE', extra_context)]
+                    explanation = explainer.generate_explanation(metadata_collection)
+                    explainer.save_explanation(explanation, file_name='', query=prompt)
+                    recommendation = explainer.get_recommendation(explanation, recommendation_threshold, recommendation_threshold2, recommendation_mode)
                     
-                    alt_result[i] = self.forward_(extended_prompt)[0]
+                    # Return improved code.
+                    if len(recommendation) >= 1:
+                        reduced_modules = all_modules.copy()
+
+                        for module in recommendation:
+                            reduced_modules.remove(module)
+                            reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
+                            reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
+                        
+                        if isinstance(prompt, list):
+                            extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
+                                               replace('INSERT_TYPE_HERE', input_type).
+                                               replace('EXTRA_CONTEXT_HERE', extra_context[i])]
+                        elif isinstance(prompt, str):
+                            extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt).
+                                               replace('INSERT_TYPE_HERE', input_type).
+                                               replace('EXTRA_CONTEXT_HERE', extra_context)]
+                        
+                        alt_result[i] = self.forward_(extended_prompt)[0]
         return result, alt_result
 
     def forward_(self, extended_prompt, temperature=0):

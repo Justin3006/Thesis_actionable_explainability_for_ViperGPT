@@ -108,7 +108,6 @@ def worker_init(queue_results_):
 
 def main():
     mp.set_start_method('spawn')
-
     from vision_processes import queues_in, finish_all_consumers, forward, manager
     from dataset_helpers import get_dataset
 
@@ -167,64 +166,72 @@ def main():
             for i, batch in tqdm(enumerate(dataloader), total=n_batches):
                 # Combine all queries and get Codex predictions for them
                 # TODO compute Codex for next batch as current batch is being processed
-                if not config.use_cached_codex:
-                    codes, alt_codes = codex(prompt=batch['query'], base_prompt=base_prompt, input_type=input_type,
-                                      extra_context=batch['extra_context'], recommendation_threshold=config.explainer.recommendation_threshold, 
-                                      least_perturbations=config.explainer.least_perutrbations, explainer_temperature=config.explainer.explainer_temperature, 
-                                      recommendation_mode=config.explainer.recommendation_mode, essential_modules=config.explainer.essential_modules)
-
-                else:
-                    codes, alt_codes = codes_all[i * batch_size:(i + 1) * batch_size]  # If cache
-                
-                # Run the code
-                if config.execute_code:
-                    if not config.multiprocessing:
-                        # Otherwise, we would create a new model for every process
-                        results = []
-                        for c, sample_id, img, possible_answers, query in \
-                                zip(codes, batch['sample_id'], batch['image'], batch['possible_answers'], batch['query']):
-                            result = run_program([c, sample_id, img, possible_answers, query], queues_in, input_type)
-                            results.append(result)
-                            
-                        alt_results = []
-                        for c, sample_id, img, possible_answers, query in \
-                                zip(alt_codes, batch['sample_id'], batch['image'], batch['possible_answers'], batch['query']):
-                            alt_result = run_program([c, sample_id, img, possible_answers, query], queues_in, input_type)
-                            results.append(alt_result)
+                for attempt in range(config.collection.code_samples):
+                    if attempt > 0:
+                        codes, alt_codes = codex(prompt=batch['query'], base_prompt=base_prompt, input_type=input_type,
+                                              extra_context=batch['extra_context'], recommendation_threshold=config.explainer.recommendation_threshold, 
+                                              recommendation_threshold2=config.explainer.recommendation_threshold2, least_perturbations=0, 
+                                              explainer_temperature=config.explainer.explainer_temperature, recommendation_mode=config.explainer.recommendation_mode, 
+                                              essential_modules=config.explainer.essential_modules)
                     else:
-                        results = list(pool.imap(partial(
-                            run_program, queues_in_=queues_in, input_type_=input_type),
-                            zip(codes, batch['sample_id'], batch['image'], batch['possible_answers'], batch['query'])))
-                        alt_results = list(pool.imap(partial(
-                            run_program, queues_in_=queues_in, input_type_=input_type),
-                            zip(alt_codes, batch['sample_id'], batch['image'], batch['possible_answers'], batch['query'])))
+                        if not config.use_cached_codex:
+                            codes, alt_codes = codex(prompt=batch['query'], base_prompt=base_prompt, input_type=input_type,
+                                              extra_context=batch['extra_context'], recommendation_threshold=config.explainer.recommendation_threshold, 
+                                              recommendation_threshold2=config.explainer.recommendation_threshold2, least_perturbations=config.explainer.least_perturbations, 
+                                              explainer_temperature=config.explainer.explainer_temperature, recommendation_mode=config.explainer.recommendation_mode, 
+                                              essential_modules=config.explainer.essential_modules)
+                        else:
+                            codes, alt_codes = codes_all[i * batch_size:(i + 1) * batch_size]  # If cache
+                    
+                    # Run the code
+                    if config.execute_code:
+                        if not config.multiprocessing:
+                            # Otherwise, we would create a new model for every process
+                            results = []
+                            for c, sample_id, img, possible_answers, query in \
+                                    zip(codes, batch['sample_id'], batch['image'], batch['possible_answers'], batch['query']):
+                                result = run_program([c, sample_id, img, possible_answers, query], queues_in, input_type)
+                                results.append(result)
+                                
+                            alt_results = []
+                            for c, sample_id, img, possible_answers, query in \
+                                    zip(alt_codes, batch['sample_id'], batch['image'], batch['possible_answers'], batch['query']):
+                                alt_result = run_program([c, sample_id, img, possible_answers, query], queues_in, input_type)
+                                results.append(alt_result)
+                        else:
+                            results = list(pool.imap(partial(
+                                run_program, queues_in_=queues_in, input_type_=input_type),
+                                zip(codes, batch['sample_id'], batch['image'], batch['possible_answers'], batch['query'])))
+                            alt_results = list(pool.imap(partial(
+                                run_program, queues_in_=queues_in, input_type_=input_type),
+                                zip(alt_codes, batch['sample_id'], batch['image'], batch['possible_answers'], batch['query'])))
 
-                else:
-                    results = [(None, c) for c in codes]
-                    alt_results = [(None, c) for c in alt_codes]
-                    warnings.warn("Not executing code! This is only generating the code. We set the flag "
-                                  "'execute_code' to False by default, because executing code generated by a language "
-                                  "model can be dangerous. Set the flag 'execute_code' to True if you want to execute "
-                                  "it.")
+                    else:
+                        results = [(None, c) for c in codes]
+                        alt_results = [(None, c) for c in alt_codes]
+                        warnings.warn("Not executing code! This is only generating the code. We set the flag "
+                                      "'execute_code' to False by default, because executing code generated by a language "
+                                      "model can be dangerous. Set the flag 'execute_code' to True if you want to execute "
+                                      "it.")
 
-                all_results += [r[0] for r in results]
-                all_codes += [r[1] for r in results]
-                all_alt_results += [r[0] for r in alt_results]
-                all_alt_codes += [r[1] for r in alt_results]
-                all_ids += batch['sample_id']
-                all_answers += batch['answer']
-                all_possible_answers += batch['possible_answers']
-                all_query_types += batch['query_type']
-                all_queries += batch['query']
-                all_img_paths += [dataset.get_img_path(idx) for idx in batch['index']]
-                if i % config.log_every == 0:
-                    try:
-                        accuracy = dataset.accuracy(all_results, all_answers, all_possible_answers, all_query_types)
-                        console.print(f'Accuracy at Batch {i}/{n_batches}: {accuracy}')
-                        alt_accuracy = dataset.accuracy(all_alt_results, all_answers, all_possible_answers, all_query_types)
-                        console.print(f'Accuracy at Batch {i}/{n_batches}: {alt_accuracy}')
-                    except Exception as e:
-                        console.print(f'Error computing accuracy: {e}')
+                    all_results += [r[0] for r in results]
+                    all_codes += [r[1] for r in results]
+                    all_alt_results += [r[0] for r in alt_results]
+                    all_alt_codes += [r[1] for r in alt_results]
+                    all_ids += batch['sample_id']
+                    all_answers += batch['answer']
+                    all_possible_answers += batch['possible_answers']
+                    all_query_types += batch['query_type']
+                    all_queries += batch['query']
+                    all_img_paths += [dataset.get_img_path(idx) for idx in batch['index']]
+                    if i % config.log_every == 0:
+                        try:
+                            accuracy = dataset.accuracy(all_results, all_answers, all_possible_answers, all_query_types)
+                            console.print(f'Accuracy at Batch {i}/{n_batches}: {accuracy}')
+                            alt_accuracy = dataset.accuracy(all_alt_results, all_answers, all_possible_answers, all_query_types)
+                            console.print(f'Accuracy at Batch {i}/{n_batches}: {alt_accuracy}')
+                        except Exception as e:
+                            console.print(f'Error computing accuracy: {e}')
 
         except Exception as e:
             # print full stack trace
@@ -255,7 +262,7 @@ def main():
                                                  str.isnumeric(ef.stem.split('_')[-1])]) + 1) + '.csv'
         print('Saving results to', filename)
         df = pd.DataFrame([all_results, all_answers, all_codes, all_ids, all_queries, all_img_paths,
-                           all_possible_answers], all_alt_results, all_alt_codes).T
+                           all_possible_answers, all_alt_results, all_alt_codes]).T
         df.columns = ['result', 'answer', 'code', 'id', 'query', 'img_path', 'possible_answers', 'alt_result', 'alt_code']
         # make the result column a string
         df['result'] = df['result'].apply(str)
