@@ -1,6 +1,7 @@
 from itertools import batched
 import json
 from math import isnan
+from struct import pack
 import pandas as pd
 import numpy as np
 from scipy.stats import median_abs_deviation
@@ -8,7 +9,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from collections import defaultdict
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import Label, filedialog
 import traceback
 from typing import List, Dict
 
@@ -300,11 +301,13 @@ def accuracy(path:str) -> None:
         traceback.print_exc()
         
 
-def correlation_new(path:str) -> None:
+def test_correlation(path:str, answers_per_sample:int = 10) -> None:
     """
     Calculates correlation betweem accuracy improvement and confidence.
+    Assumes ratio of answers to explanations to be answers_per_sample to 1.
     
     :param path: Name of the dictionary containing the files to use.
+    :answers_per_sample: How many answers to expect per query.
     """
     try:
         # Load Data.
@@ -372,14 +375,18 @@ if __name__ == "__main__":
     root = tk.Tk()
     root.geometry("300x300+50+50")
     btns = []
+    samplesize_widget = tk.Entry(root)
+    samplesize_widget.insert(0, "10")
     def resetPath():
         global path
         path = filedialog.askdirectory(title="Choose working directory containing 'explanations.json' and 'results.csv'.")
     btns.append(tk.Button(root, text="Reset Path", command=lambda:resetPath()))
     btns.append(tk.Button(root, text="Stats", command=lambda:calculate_statistics(path)))
-    btns.append(tk.Button(root, text="Correlation", command=lambda:correlation_new(path)))
-    btns.append(tk.Button(root, text="Consistency", command=lambda:test_consistency(path)))
+    btns.append(tk.Button(root, text="Correlation", command=lambda:test_correlation(path, samplesize_widget.getint())))
+    btns.append(tk.Button(root, text="Consistency", command=lambda:test_consistency(path, samplesize_widget.getint())))
     btns.append(tk.Button(root, text="Accuracy", command=lambda:accuracy(path)))
     for btn in btns:
         btn.pack(side=tk.TOP, pady=5)
+    tk.Label(root, text="sample size (if needed):").pack(side=tk.TOP, pady=0)
+    samplesize_widget.pack(side=tk.TOP, pady=5)
     root.mainloop()
