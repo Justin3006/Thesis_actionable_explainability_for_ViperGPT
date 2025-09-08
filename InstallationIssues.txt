@@ -1,48 +1,26 @@
-Conda 4.6 apparently changed some commands.
-Setup files from the vipergpt git don't entirely work with the new ones.
-=> Manually went through setup steps
+- TCL_M4 moved to different address, now only available in archive with different models. 
+  => Use this call:   
+        gdown "https://drive.google.com/uc?id=1eHinvFP7TnZYAL2Ft-M8rPott7mpVN2R" -O TCL.zip
+     then unzip TCL.zip
 
-TCL_M4 moved to different address, now only available in archive with different models. 
-=> Use this call:   
-gdown "https://drive.google.com/uc?id=1eHinvFP7TnZYAL2Ft-M8rPott7mpVN2R" -O TCL.zip
-then unzip TCL.zip
+- Issues with importing BLIP-2 from transformers 
+  => pip install transformers==4.27.0
+- Required for compatibility: 
+  - Use new torch versions
+  - pip install -U accelerate
+  - pip install -U bitsandbytes
+  - pip install -U inflect
+- In torchvision add NEAREST_EXACT = "nearest" to InterpolationMode in transforms.functional.py
+- In transformers.models.blip_2.modeling_blip2: from ...generation import GenerationMixin => from ...generation.utils import GenerationMixin
 
-Issues with importing BLIP-2 from transformers 
-=> pip install transformers==4.27.0
+- execute:
+     export TORCH_HOME='<INSERT_SOME_PATH_HERE>/TORCH_HOME'
+     export HF_HOME='<INSERT_SOME_PATH_HERE>/HF_HOME'
 
-In vision models, blip imports don't work.
-=> Change to this:
-from transformers.models.blip_2.processing_blip_2 import Blip2Processor 
-from transformers.models.blip_2.modeling_blip_2 import Blip2ForConditionalGeneration
+- upgrade protobuff, copy builder, downgrade to 3.19.6, paste builder 
+- in /GLIP/maskrcnn_benchmark/csrc/cuda/: Change all 'AT_DISPATCH_FLOATING_TYPES({X}.type()' references to 'AT_DISPATCH_FLOATING_TYPES({X}.scalar_type()'
 
-In torchvision add NEAREST_EXACT = "nearest" to InterpolationMode in transforms.functional.py
-
-In transformers.models.blip_2.modeling_blip2: from ...generation import GenerationMixin => from ...generation.utils import GenerationMixin
-
-export TORCH_HOME='/pfss/mlde/workspaces/mlde_wsp_PI_Mezini/jl17wali/TORCH_HOME'
-export HF_HOME='/pfss/mlde/workspaces/mlde_wsp_PI_Mezini/jl17wali/HF_HOME'
-
-
-upgrade protobuff, copy builder, downgrade to 3.19.6, paste builder 
-
-
-in /GLIP/maskrcnn_benchmark/csrc/cuda/: Change all 'AT_DISPATCH_FLOATING_TYPES({X}.type()' references to 'AT_DISPATCH_FLOATING_TYPES({X}.scalar_type()'
-
-import nltk
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
-
-
-
-
-
-
-Alternate: Use new torch versions + pip install -U accelerate + pip install -U bitsandbytes + pip install -U inflect
-In vision models, blip imports don't work.
-=> Change to this:
-from transformers.models.blip_2.processing_blip_2 import Blip2Processor 
-from transformers.models.blip_2.modeling_blip_2 import Blip2ForConditionalGeneration
-In transformers.models.blip_2.modeling_blip2: from ...generation import GenerationMixin => from ...generation.utils import GenerationMixin
-from transformers.models.code_llama.tokenization_code_llama import CodeLlamaTokenizer
-In vision_models: from transformers.models.llama.modeling_llama import LlamaForCausalLM 
-In gqa.py: add ', **kwargs' to init params
+- in python execute:
+     import nltk
+     nltk.download('punkt', download_dir=<INSERT_SOME_PATH_HERE>)
+     nltk.download('averaged_perceptron_tagger', download_dir=<INSERT_SOME_PATH_HERE>)

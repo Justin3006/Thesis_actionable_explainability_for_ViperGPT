@@ -164,10 +164,12 @@ def calculate_correlation(path:str) -> None:
             'Mean Confidence': mean_confidence_per_result,
             'Correctness': ["Correct" if value else "Incorrect" for value in correctness_values]
         })
+        plt.figure(figsize=(10,8))
+        sns.set_style('whitegrid')            
+        sns.set_context("paper", 3, rc={"lines.linewidth": 3})
         sns.boxplot(y='Mean Confidence', x='Correctness', data=df)
         plt.ylabel('Mean Confidence of Used Modules')
         plt.xlabel('')
-        plt.title('Mean Confidence by Correctness')
         plt.savefig("MeanConfidenceCorrelation.pdf")
         plt.show()
         
@@ -175,10 +177,12 @@ def calculate_correlation(path:str) -> None:
             'Min Confidence': min_confidence_per_result,
             'Correctness': ["Correct" if value else "Incorrect" for value in correctness_values]
         })
+        plt.figure(figsize=(10,8))
+        sns.set_style('whitegrid')            
+        sns.set_context("paper", 3, rc={"lines.linewidth": 3})
         sns.boxplot(y='Min Confidence', x='Correctness', data=df)
         plt.ylabel('Minimum Confidence of Used Modules')
         plt.xlabel('')
-        plt.title('Min Confidence by Correctness')
         plt.savefig("MinConfidenceCorrelation.pdf")
         plt.show()
     except:
@@ -249,13 +253,16 @@ def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
         print("Number of Confidence Samples where the Difference is 0.1 or lower")
         print(len(np.where(np.array(diffs_confidence)<=0.1)[0]))
         
+        plt.figure(figsize=(10,8))
         sns.set_style('whitegrid')            
+        sns.set_context("paper", 3, rc={"lines.linewidth": 3})
         sns.kdeplot(np.array(diffs_confidence))
         plt.xlim(0, 0.5)
         plt.axvline(x=0.1, color='r', ls=':')
         plt.xlabel("Max Difference")
-        plt.title("KDE Max Difference of Confidence Measurements between Different Explanations")
+        plt.ylabel("Density")
         plt.savefig("MaxDiffConfidence.pdf")
+        plt.savefig("MaxDiffConfidence.png")
         plt.show()
         
         print("Total Number of Non-Zero Ties Samples")
@@ -265,12 +272,17 @@ def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
         print("Number of Ties Samples where the Difference is 0.1 or lower")
         print(len(np.where(np.array(diffs_ties)<=0.1)[0]))
 
+        plt.figure(figsize=(10,8))
+        sns.set_style('whitegrid')            
+        sns.set_context("paper", 3, rc={"lines.linewidth": 3})
         sns.kdeplot(np.array(diffs_ties))
         plt.xlim(0, 0.5)
         plt.axvline(x=0.1, color='r', ls=':')
         plt.xlabel("Max Difference")
-        plt.title("KDE Max Difference of Ties Measurements between Different Explanations")
+        plt.ylabel("Density")
+        #plt.title("KDE Max Difference of Ties Measurements between Different Explanations")
         plt.savefig("MaxDiffTies.pdf")
+        plt.savefig("MaxDiffTies.png")
         plt.show()
     except:
         print("Some error occured.")
@@ -382,8 +394,8 @@ if __name__ == "__main__":
         path = filedialog.askdirectory(title="Choose working directory containing 'explanations.json' and 'results.csv'.")
     btns.append(tk.Button(root, text="Reset Path", command=lambda:resetPath()))
     btns.append(tk.Button(root, text="Stats", command=lambda:calculate_statistics(path)))
-    btns.append(tk.Button(root, text="Correlation", command=lambda:test_correlation(path, samplesize_widget.getint())))
-    btns.append(tk.Button(root, text="Consistency", command=lambda:test_consistency(path, samplesize_widget.getint())))
+    btns.append(tk.Button(root, text="Correlation", command=lambda:test_correlation(path, int(samplesize_widget.get()))))
+    btns.append(tk.Button(root, text="Consistency", command=lambda:test_consistency(path, int(samplesize_widget.get()))))
     btns.append(tk.Button(root, text="Accuracy", command=lambda:accuracy(path)))
     for btn in btns:
         btn.pack(side=tk.TOP, pady=5)
