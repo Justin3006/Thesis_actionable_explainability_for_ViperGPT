@@ -26,6 +26,7 @@ from torch import hub
 from torch.nn import functional as F
 from torchvision import transforms
 from typing import List, Union
+from transformers import set_seed
 
 from configs import config
 from utils import HiddenPrints
@@ -1209,14 +1210,17 @@ class CodexModel(BaseModel):
         else:
             raise TypeError("prompt must be a string or a list of strings")
 
-        result = self.forward_(extended_prompt, temperature=config.codex.temperature)
+        result, original_token_length = self.forward_(extended_prompt, temperature=config.codex.temperature)
         if not isinstance(prompt, list):
             result = result[0]
+            origirnal_token_length = original_token_length[0]
         
         ###############################################################
         ###              EXPLANATIONS
         ###############################################################
-        alt_result = [r for r in result]    
+        alt_result = [r for r in result]   
+        alt_token_length = [o for o in original_token_length]
+        
         if least_perturbations > 0:
             import explainer
             for i in range(len(alt_result)):
@@ -1233,7 +1237,7 @@ class CodexModel(BaseModel):
                     
                     # Repeat for full prompt.
                     for cycle in range(required_perturbation_cycles):
-                        code_0 = self.forward_(extended_prompt, temperature=explainer_temperature)[0]
+                        code_0, token_length = self.forward_(extended_prompt, temperature=explainer_temperature)[0]
                         used_modules = explainer.identify_used_modules(code_0, all_modules)
                         metadata_collection[cycle][''] = explainer.gather_metadata(code_0, all_modules, used_modules)
                     
@@ -1254,12 +1258,12 @@ class CodexModel(BaseModel):
                                                replace('EXTRA_CONTEXT_HERE', extra_context)]
 
                         for cycle in range(required_perturbation_cycles):
-                            code_m = self.forward_(extended_prompt_alt, temperature=explainer_temperature)[0]
+                            code_m, token_length = self.forward_(extended_prompt_alt, temperature=explainer_temperature)[0]
                             used_modules = explainer.identify_used_modules(code_m, all_modules)
                             metadata_collection[cycle][module] = explainer.gather_metadata(code_m, reduced_modules, used_modules)
                     
                     explanation = explainer.generate_explanation(metadata_collection)
-                    explainer.save_explanation(explanation, file_name='', query=prompt)
+                    explainer.save_explanation(explanation, filename='', query=prompt[i])
                     recommendation = explainer.get_recommendation(explanation, recommendation_threshold, recommendation_threshold2, recommendation_mode)
                     
                     # Return improved code.
@@ -1267,9 +1271,10 @@ class CodexModel(BaseModel):
                         reduced_modules = all_modules.copy()
 
                         for module in recommendation:
-                            reduced_modules.remove(module)
-                            reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
-                            reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
+                            if module not in essential_modules:
+                                reduced_modules.remove(module)
+                                reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
+                                reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
                         
                         if isinstance(prompt, list):
                             extended_prompt = [reduced_prompt.replace("INSERT_QUERY_HERE", prompt[i]).
@@ -1280,15 +1285,19 @@ class CodexModel(BaseModel):
                                                replace('INSERT_TYPE_HERE', input_type).
                                                replace('EXTRA_CONTEXT_HERE', extra_context)]
                         
-                        alt_result[i] = self.forward_(extended_prompt)[0]
-        return result, alt_result
+                        alt_result[i], alt_token_length[i] = self.forward_(extended_prompt)[0]
+        length_reduction = [alt_token_length[i] / original_token_length[i] for i in range(len(result))]
+        return result, alt_result, length_reduction
 
     def forward_(self, extended_prompt, temperature=0):
         if len(extended_prompt) > self.max_batch_size:
             response = []
+            token_length = []
             for i in range(0, len(extended_prompt), self.max_batch_size):
-                response += self.forward_(extended_prompt[i:i + self.max_batch_size])
-            return response
+                r = self.forward_(extended_prompt[i:i + self.max_batch_size], temperature)
+                response += r[0]
+                token_length += r[1]
+            return response, token_length
         try:
             response = codex_helper(extended_prompt)
         except openai.error.RateLimitError as e:
@@ -1300,20 +1309,20 @@ class CodexModel(BaseModel):
             sub_batch_1 = extended_prompt[:len(extended_prompt) // 2]
             sub_batch_2 = extended_prompt[len(extended_prompt) // 2:]
             if len(sub_batch_1) > 0:
-                response_1 = self.forward_(sub_batch_1)
+                response_1, token_length = self.forward_(sub_batch_1)
             else:
-                response_1 = []
+                response_1, token_length = [], 0
             if len(sub_batch_2) > 0:
-                response_2 = self.forward_(sub_batch_2)
+                response_2, token_length = self.forward_(sub_batch_2)
             else:
-                response_2 = []
+                response_2, token_length = [], 0
             response = response_1 + response_2
         except Exception as e:
             # Some other error like an internal OpenAI error
             print("Retrying Codex")
             print(e)
-            response = self.forward_(extended_prompt)
-        return response
+            response, token_length = self.forward_(extended_prompt)
+        return response, token_length
 
 
 class CodeLlama(CodexModel):
@@ -1371,6 +1380,7 @@ class CodeLlama(CodexModel):
 
     def run_codellama(self, prompt, temperature=0):
         do_sample = temperature > 0
+        set_seed(np.random.randint(0,100))
         input_ids = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)["input_ids"]
         generated_ids = self.model.generate(input_ids.to("cuda"), max_new_tokens=256, temperature=temperature, do_sample=do_sample)
         generated_ids = generated_ids[:, input_ids.shape[-1]:]
@@ -1381,19 +1391,22 @@ class CodeLlama(CodexModel):
                           replace("def execute_command(image):","    ").
                           replace("def execute_command(image)->str:","    ") 
                           for text in generated_text]
-        return generated_text
+        return generated_text, len(input_ids)
 
     def forward_(self, extended_prompt, temperature=0):
         if len(extended_prompt) > self.max_batch_size:
             response = []
+            token_length = []
             for i in range(0, len(extended_prompt), self.max_batch_size):
-                response += self.forward_(extended_prompt[i:i + self.max_batch_size])
-            return response
+                r = self.forward_(extended_prompt[i:i + self.max_batch_size], temperature)
+                response += r[0]
+                token_length += r[1]
+            return response, token_length
         with torch.no_grad():
-            response = self.run_codellama(extended_prompt, temperature)
+            response, token_length = self.run_codellama(extended_prompt, temperature)
         # Clear GPU memory
         torch.cuda.empty_cache()
-        return response
+        return response, token_length
 
 
 class BLIPModel(BaseModel):

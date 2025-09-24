@@ -157,6 +157,7 @@ def main():
     all_query_types = []
     all_alt_results = []
     all_alt_codes = []
+    all_length_reductions = []
 
     with mp.Pool(processes=num_processes, initializer=worker_init, initargs=(queues_results,)) \
             if config.multiprocessing else open(os.devnull, "w") as pool:
@@ -168,20 +169,20 @@ def main():
                 # TODO compute Codex for next batch as current batch is being processed
                 for attempt in range(config.collection.code_samples):
                     if attempt > 0:
-                        codes, alt_codes = codex(prompt=batch['query'], base_prompt=base_prompt, input_type=input_type,
+                        codes, alt_codes, length_reduction = codex(prompt=batch['query'], base_prompt=base_prompt, input_type=input_type,
                                               extra_context=batch['extra_context'], recommendation_threshold=config.explainer.recommendation_threshold, 
                                               recommendation_threshold2=config.explainer.recommendation_threshold2, least_perturbations=0, 
                                               explainer_temperature=config.explainer.explainer_temperature, recommendation_mode=config.explainer.recommendation_mode, 
                                               essential_modules=config.explainer.essential_modules)
                     else:
                         if not config.use_cached_codex:
-                            codes, alt_codes = codex(prompt=batch['query'], base_prompt=base_prompt, input_type=input_type,
+                            codes, alt_codes, length_reduction = codex(prompt=batch['query'], base_prompt=base_prompt, input_type=input_type,
                                               extra_context=batch['extra_context'], recommendation_threshold=config.explainer.recommendation_threshold, 
                                               recommendation_threshold2=config.explainer.recommendation_threshold2, least_perturbations=config.explainer.least_perturbations, 
                                               explainer_temperature=config.explainer.explainer_temperature, recommendation_mode=config.explainer.recommendation_mode, 
                                               essential_modules=config.explainer.essential_modules)
                         else:
-                            codes, alt_codes = codes_all[i * batch_size:(i + 1) * batch_size]  # If cache
+                            codes, alt_codes, length_reduction = codes_all[i * batch_size:(i + 1) * batch_size]  # If cache
                     
                     # Run the code
                     if config.execute_code:
@@ -218,6 +219,7 @@ def main():
                     all_codes += [r[1] for r in results]
                     all_alt_results += [r[0] for r in alt_results]
                     all_alt_codes += [r[1] for r in alt_results]
+                    all_length_reductions += [lr for lr in length_reduction]
                     all_ids += batch['sample_id']
                     all_answers += batch['answer']
                     all_possible_answers += batch['possible_answers']
@@ -229,7 +231,9 @@ def main():
                             accuracy = dataset.accuracy(all_results, all_answers, all_possible_answers, all_query_types)
                             console.print(f'Accuracy at Batch {i}/{n_batches}: {accuracy}')
                             alt_accuracy = dataset.accuracy(all_alt_results, all_answers, all_possible_answers, all_query_types)
-                            console.print(f'Accuracy at Batch {i}/{n_batches}: {alt_accuracy}')
+                            console.print(f'Accuracy (alt) at Batch {i}/{n_batches}: {alt_accuracy}')
+                            mean_length_reduction = np.mean(all_length_reductions)
+                            console.print(f'Length Reduction at Batch {i}/{n_batches}: {mean_length_reduction}')
                         except Exception as e:
                             console.print(f'Error computing accuracy: {e}')
 
@@ -244,6 +248,8 @@ def main():
         console.print(f'Final accuracy: {accuracy}')
         alt_accuracy = dataset.accuracy(all_alt_results, all_answers, all_possible_answers, all_query_types)
         console.print(f'Final accuracy (alt): {alt_accuracy}')
+        mean_length_reduction = np.mean(all_length_reductions)
+        console.print(f'Final Length Reduction: {mean_length_reduction}')
     except Exception as e:
         print(f'Error computing accuracy: {e}')
 
@@ -262,8 +268,8 @@ def main():
                                                  str.isnumeric(ef.stem.split('_')[-1])]) + 1) + '.csv'
         print('Saving results to', filename)
         df = pd.DataFrame([all_results, all_answers, all_codes, all_ids, all_queries, all_img_paths,
-                           all_possible_answers, all_alt_results, all_alt_codes]).T
-        df.columns = ['result', 'answer', 'code', 'id', 'query', 'img_path', 'possible_answers', 'alt_result', 'alt_code']
+                           all_possible_answers, all_alt_results, all_alt_codes, all_length_reductions]).T
+        df.columns = ['result', 'answer', 'code', 'id', 'query', 'img_path', 'possible_answers', 'alt_result', 'alt_code', 'length_reduction']
         # make the result column a string
         df['result'] = df['result'].apply(str)
         df.to_csv(results_dir / filename, header=True, index=False, encoding='utf-8')

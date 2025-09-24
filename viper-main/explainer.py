@@ -167,6 +167,7 @@ def save_explanation(explanation:Dict[str, Any], filename: str = 'explanations',
     else:
         existing_data = {}
 
+    explanation = explanation.copy()
     explanation['Query'] = query
 
     for key, value in explanation.items():

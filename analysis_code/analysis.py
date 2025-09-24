@@ -68,6 +68,22 @@ def calculate_statistics(path:str) -> None:
         print("Ties: ")
         print(mean_ties_per_module)
         
+        # Plot confidence as heatmap
+        df = pd.DataFrame([mean_confidence_per_module.values()])
+        df.fillna(0, inplace=True)
+        df.sort_index(inplace=True)
+        df.sort_index(axis=1, inplace=True)
+        
+        plt.figure(figsize=(10, 6))
+        sns.set(font_scale=1.4)
+        sns.heatmap(df, annot=True, cmap="YlGnBu", fmt=".2f", cbar=False, square=True,
+                        yticklabels=False, xticklabels=mean_confidence_per_module.keys())
+        plt.tight_layout()
+        plt.yticks(rotation=0)
+        plt.title("Confidence")
+        plt.savefig("MeanConfidenceHeatmap.pdf")
+        plt.show()
+
         # Plot ties as heatmap
         df = pd.DataFrame.from_dict(mean_ties_per_module, orient='index')
         df.fillna(0, inplace=True)
@@ -75,19 +91,117 @@ def calculate_statistics(path:str) -> None:
         df.sort_index(axis=1, inplace=True)
         
         plt.figure(figsize=(10, 6))
-        sns.heatmap(df, annot=True, cmap="YlGnBu", fmt=".2f")
-        plt.title("Mean Ties from A to B")
-        plt.xlabel("Module B")
-        plt.ylabel("Module A")
+        sns.set(font_scale=0.8)
+        sns.heatmap(df, annot=True, cmap="YlGnBu", fmt=".2f", square=True)
         plt.tight_layout()
-        plt.savefig("TiesHeatmap.pdf")
+        plt.savefig("MeanTiesHeatmap.pdf")
+        plt.show()
+        
+        for module, ties in mean_ties_per_module.items():
+            df = pd.DataFrame([ties.values()])
+            df.fillna(0, inplace=True)
+            df.sort_index(axis=1, inplace=True)
+            
+            plt.figure(figsize=(10, 6))
+            sns.set(font_scale=1.4)
+            sns.heatmap(df, annot=True, cmap="YlGnBu", fmt=".2f", cbar=False, square=True,
+                        yticklabels=False, xticklabels=ties.keys())
+            plt.tight_layout()
+            plt.yticks(rotation=0)
+            plt.title(f"Ties from '{module}'")
+            plt.savefig(f"MeanTiesHeatmap{module}.pdf")
         plt.show()
     except:
         print("Some error occured.")
         traceback.print_exc()
 
 
-def calculate_correlation(path:str) -> None:
+def display_for_query(path:str, i:int) -> None:
+    """
+    Displays plots containing explanantions about i-th query.
+    
+    :param path: Name of the dictionary containing the files to use.
+    :param i: Index of the query to display results for.
+    """
+    try:
+        with open(path + "/explanations.json", 'r') as f:
+            data = json.load(f)
+        try:
+            data.pop('Query')
+        except:
+            print("No query attached!")
+            
+        print(module for module in data)
+
+        # Confidences
+        confidence_per_module = {}
+        for module, explanations in data.items():
+            confidence_per_module[module] = explanations[i]['Confidence']
+        print("Confidences: ")
+        print(confidence_per_module)
+        
+        # Ties
+        ties_per_module = {}
+        for module, explanations in data.items():
+            ties = {}
+            for other_module in explanations[0]['Ties']:
+                ties[other_module] = explanations[i]['Ties'][other_module]
+            ties_per_module[module] = ties
+        print("Ties: ")
+        print(ties_per_module)
+        
+        # Plot confidence as heatmap
+        df = pd.DataFrame([confidence_per_module.values()])
+        df.fillna(0, inplace=True)
+        df.sort_index(inplace=True)
+        df.sort_index(axis=1, inplace=True)
+        
+        plt.figure(figsize=(10, 6))
+        sns.set(font_scale=1.4)
+        sns.heatmap(df, annot=True, cmap="YlGnBu", fmt=".2f", cbar=False, square=True,
+                        yticklabels=False, xticklabels=confidence_per_module.keys())
+        plt.tight_layout()
+        plt.yticks(rotation=0)
+        plt.title("Confidence")
+        plt.savefig("SingleConfidenceHeatmap.pdf")
+        plt.show()
+
+        # Plot ties as heatmap
+        df = pd.DataFrame.from_dict(ties_per_module, orient='index')
+        df.fillna(0, inplace=True)
+        df.sort_index(inplace=True)
+        df.sort_index(axis=1, inplace=True)
+        
+        plt.figure(figsize=(10, 6))
+        sns.set(font_scale=0.8)
+        sns.heatmap(df, annot=True, cmap="YlGnBu", fmt=".2f", square=True)
+        plt.title("Mean Ties from A to B")
+        plt.xlabel("Module B")
+        plt.ylabel("Module A")
+        plt.tight_layout()
+        plt.savefig("SingleTiesHeatmap.pdf")
+        plt.show()
+        
+        for module, ties in ties_per_module.items():
+            df = pd.DataFrame([ties.values()])
+            df.fillna(0, inplace=True)
+            df.sort_index(axis=1, inplace=True)
+            
+            plt.figure(figsize=(10, 6))
+            sns.set(font_scale=1.4)
+            sns.heatmap(df, annot=True, cmap="YlGnBu", fmt=".2f", cbar=False, square=True,
+                        yticklabels=False, xticklabels=ties.keys())
+            plt.tight_layout()
+            plt.yticks(rotation=0)
+            plt.title(f"Ties from '{module}'")
+            plt.savefig(f"SingleTiesHeatmap{module}.pdf")
+            plt.show()
+    except:
+        print("Some error occured.")
+        traceback.print_exc()
+
+
+def calculate_correlation(path:str, inti) -> None:
     """
     OBSOLETE
     Calculates correlation betweem accuracy and confidence. 
@@ -164,26 +278,27 @@ def calculate_correlation(path:str) -> None:
             'Mean Confidence': mean_confidence_per_result,
             'Correctness': ["Correct" if value else "Incorrect" for value in correctness_values]
         })
-        plt.figure(figsize=(10,8))
-        sns.set_style('whitegrid')            
-        sns.set_context("paper", 3, rc={"lines.linewidth": 3})
-        sns.boxplot(y='Mean Confidence', x='Correctness', data=df)
+        plt.figure(figsize=(5,4))
+        sns.set_style('whitegrid')      
+        sns.boxplot(y='Mean Confidence', x='Correctness', data=df, width=0.4, 
+                    boxprops=dict(facecolor="turquoise"))
+        sns.set_style('whitegrid')      
         plt.ylabel('Mean Confidence of Used Modules')
         plt.xlabel('')
-        plt.savefig("MeanConfidenceCorrelation.pdf")
+        plt.savefig("MeanConfidenceCorrelation.pdf",bbox_inches='tight')
         plt.show()
         
         df = pd.DataFrame({
             'Min Confidence': min_confidence_per_result,
             'Correctness': ["Correct" if value else "Incorrect" for value in correctness_values]
         })
-        plt.figure(figsize=(10,8))
-        sns.set_style('whitegrid')            
-        sns.set_context("paper", 3, rc={"lines.linewidth": 3})
-        sns.boxplot(y='Min Confidence', x='Correctness', data=df)
+        plt.figure(figsize=(5,4))
+        sns.set_style('whitegrid')      
+        sns.boxplot(y='Min Confidence', x='Correctness', data=df, width=0.4, 
+                    boxprops=dict(facecolor="turquoise"))
         plt.ylabel('Minimum Confidence of Used Modules')
         plt.xlabel('')
-        plt.savefig("MinConfidenceCorrelation.pdf")
+        plt.savefig("MinConfidenceCorrelation.pdf",bbox_inches='tight')
         plt.show()
     except:
         print("Some error occured.")
@@ -198,7 +313,6 @@ def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
     :param explanations_per_samples: How many explanations are contained per sample in the file.
     """
     try:
-        from scipy.stats import variation  # coefficient_of_variation
         with open(path + "/explanations.json", 'r') as f:
             data_explanations_dict = json.load(f)
         try:
@@ -207,10 +321,10 @@ def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
             print("No query attached!")
             
         number_of_samples = int(len(data_explanations_dict['find']) / explanations_per_sample)
-        variations_confidence = []
-        diffs_confidence = []
-        variations_ties = []
-        diffs_ties = []
+        max_diffs_confidence = []
+        mean_diffs_confidence = []
+        max_diffs_ties = []
+        mean_diffs_ties = []
         
         # Gather variation in confidences
         for i in range(number_of_samples):
@@ -219,14 +333,12 @@ def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
                 
                 if all(confidences) == 0:
                     continue
-
-                var = variation(confidences, ddof=1) * 100
-                if np.isnan(var):
-                    var = 0
-                variations_confidence.append(var)
                 
                 diff = np.max(confidences) - np.min(confidences)
-                diffs_confidence.append(diff)
+                max_diffs_confidence.append(diff)
+                for confidence in confidences:
+                    mean_diff = np.abs(np.mean(confidences) - confidence)
+                    mean_diffs_confidence.append(mean_diff)
                 
         # Gather variation in ties
         for i in range(number_of_samples):
@@ -236,53 +348,98 @@ def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
                     
                     if all(ties) == 0:
                         continue
-
-                    var = variation(ties, ddof=1) * 100
-                    if np.isnan(var):
-                        var = 0
-                    variations_ties.append(var)
                     
                     diff = np.max(ties) - np.min(ties)
-                    diffs_ties.append(diff)
+                    max_diffs_ties.append(diff)
+                    for tie in ties:
+                        mean_diff = np.abs(np.mean(ties) - tie)
+                        mean_diffs_ties.append(mean_diff)
                 
         # Analyse results
         print("Total Number of Non-Zero Confidence Samples")
-        print(len(diffs_confidence))
+        print(len(max_diffs_confidence))
         print("Number of Confidence Samples where the Difference is 0")
-        print(len(np.where(np.array(diffs_confidence)==0)[0]))
+        print(len(np.where(np.array(max_diffs_confidence)==0)[0]))
+        print("Number of Confidence Samples where the Difference is 0.05 or lower")
+        print(len(np.where(np.array(max_diffs_confidence)<=0.05)[0]))
         print("Number of Confidence Samples where the Difference is 0.1 or lower")
-        print(len(np.where(np.array(diffs_confidence)<=0.1)[0]))
+        print(len(np.where(np.array(max_diffs_confidence)<=0.1)[0]))
+        print("Number of Confidence Samples where the Difference is 0.15 or lower")
+        print(len(np.where(np.array(max_diffs_confidence)<=0.15)[0]))
+        print("Number of Confidence Samples where the Difference is 0.2 or lower")
+        print(len(np.where(np.array(max_diffs_confidence)<=0.2)[0]))
         
-        plt.figure(figsize=(10,8))
+        plt.figure(figsize=(7.5,6))
         sns.set_style('whitegrid')            
         sns.set_context("paper", 3, rc={"lines.linewidth": 3})
-        sns.kdeplot(np.array(diffs_confidence))
+        sns.kdeplot(np.array(max_diffs_confidence))
         plt.xlim(0, 0.5)
-        plt.axvline(x=0.1, color='r', ls=':')
+        plt.axvline(x=0.1, color='r', ls='--')    
+        plt.axvline(x=0.2, color='r', ls=':')
         plt.xlabel("Max Difference")
         plt.ylabel("Density")
-        plt.savefig("MaxDiffConfidence.pdf")
-        plt.savefig("MaxDiffConfidence.png")
+        ax = plt.gca()
+        yticks = ax.yaxis.get_major_ticks() 
+        yticks[0].label1.set_visible(False)
+        plt.savefig("MaxDiffConfidence.pdf",bbox_inches='tight')
+        plt.show()
+
+        plt.figure(figsize=(7.5,6))
+        sns.set_style('whitegrid')            
+        sns.set_context("paper", 3, rc={"lines.linewidth": 3})
+        sns.kdeplot(np.array(mean_diffs_confidence))
+        plt.xlim(0, 0.5)
+        plt.axvline(x=0.1, color='r', ls='--')    
+        plt.axvline(x=0.2, color='r', ls=':')
+        plt.xlabel("Mean Difference")
+        plt.ylabel("Density")
+        ax = plt.gca()
+        yticks = ax.yaxis.get_major_ticks() 
+        yticks[0].label1.set_visible(False)
+        plt.savefig("MeanDiffConfidence.pdf",bbox_inches='tight')
         plt.show()
         
         print("Total Number of Non-Zero Ties Samples")
-        print(len(diffs_ties))
+        print(len(max_diffs_ties))
         print("Number of Ties Samples where the Difference is 0")
-        print(len(np.where(np.array(diffs_ties)==0)[0]))
+        print(len(np.where(np.array(max_diffs_ties)==0)[0]))
+        print("Number of Ties Samples where the Difference is 0.05 or lower")
+        print(len(np.where(np.array(max_diffs_ties)<=0.05)[0]))
         print("Number of Ties Samples where the Difference is 0.1 or lower")
-        print(len(np.where(np.array(diffs_ties)<=0.1)[0]))
+        print(len(np.where(np.array(max_diffs_ties)<=0.1)[0]))
+        print("Number of Ties Samples where the Difference is 0.15 or lower")
+        print(len(np.where(np.array(max_diffs_ties)<=0.15)[0]))
+        print("Number of Ties Samples where the Difference is 0.2 or lower")
+        print(len(np.where(np.array(max_diffs_ties)<=0.2)[0]))
 
-        plt.figure(figsize=(10,8))
+        plt.figure(figsize=(7.5,6))
         sns.set_style('whitegrid')            
         sns.set_context("paper", 3, rc={"lines.linewidth": 3})
-        sns.kdeplot(np.array(diffs_ties))
+        sns.kdeplot(np.array(max_diffs_ties))
         plt.xlim(0, 0.5)
-        plt.axvline(x=0.1, color='r', ls=':')
+        plt.axvline(x=0.1, color='r', ls='--')
+        plt.axvline(x=0.2, color='r', ls=':')
         plt.xlabel("Max Difference")
         plt.ylabel("Density")
-        #plt.title("KDE Max Difference of Ties Measurements between Different Explanations")
-        plt.savefig("MaxDiffTies.pdf")
-        plt.savefig("MaxDiffTies.png")
+        ax = plt.gca()
+        yticks = ax.yaxis.get_major_ticks() 
+        yticks[0].label1.set_visible(False)
+        plt.savefig("MaxDiffTies.pdf",bbox_inches='tight')
+        plt.show()
+        
+        plt.figure(figsize=(7.5,6))
+        sns.set_style('whitegrid')            
+        sns.set_context("paper", 3, rc={"lines.linewidth": 3})
+        sns.kdeplot(np.array(mean_diffs_ties))
+        plt.xlim(0, 0.5)
+        plt.axvline(x=0.1, color='r', ls='--')    
+        plt.axvline(x=0.2, color='r', ls=':')
+        plt.xlabel("Mean Difference")
+        plt.ylabel("Density")
+        ax = plt.gca()
+        yticks = ax.yaxis.get_major_ticks() 
+        yticks[0].label1.set_visible(False)
+        plt.savefig("MeanDiffConfidence.pdf",bbox_inches='tight')
         plt.show()
     except:
         print("Some error occured.")
@@ -304,10 +461,19 @@ def accuracy(path:str) -> None:
         accuracy = dataset_helpers.accuracy(results, answers)
         print("Original")
         print(accuracy)    
-        results = [data_point["alt_result"] for idx, data_point in data_results_df.iterrows()]
-        accuracy = dataset_helpers.accuracy(results, answers)
-        print("Following recommendation")
-        print(accuracy)
+        try:
+            alt_results = [data_point["alt_result"] for idx, data_point in data_results_df.iterrows()]
+            accuracy = dataset_helpers.accuracy(alt_results, answers)
+            print("Following recommendation")
+            print(accuracy)
+        except:
+            print("No alt results")
+        
+        default_answers = len([0 for idx, data_point in data_results_df.iterrows() if 'image_patch.simple_query(query)' in data_point["code"] or 
+                                                                                        ".forward('glip'" in data_point["code"]])
+        print("Non-executable Code")
+        print(default_answers/len(answers))
+        
     except:
         print("Some error occured.")
         traceback.print_exc()
@@ -341,7 +507,7 @@ def test_correlation(path:str, answers_per_sample:int = 10) -> None:
             used_modules_per_task[data_point["query"]].append(identify_used_modules(data_point["code"], all_modules))
 
         # Sort explanations by query.
-        explanations_per_task = {query:[]for query in all_queries}
+        explanations_per_task = {query:[] for query in all_queries}
         for i in range(len(data_explanations_dict['find'])):
             query = data_explanations_dict['Query'][i]
             explanations_per_task[query].append({module:data_explanations_dict[module][i] for module in all_modules})
@@ -350,10 +516,11 @@ def test_correlation(path:str, answers_per_sample:int = 10) -> None:
         all_confidence_diffs = []
         for query, explanations in explanations_per_task.items():
             min_confidences = [] 
+            if len(explanations) == 0:
+                continue
             for i in range(len(correctness_values_per_task[query])):
                 min_confidence_of_used = min([explanation['Confidence'] for module, explanation in explanations[-1].items() if module in used_modules_per_task[query][i]], default=0)
                 min_confidences.append(min_confidence_of_used)
-            print(min_confidences)
             confidence_diffs = [confidence - min(min_confidences) for confidence in min_confidences]
             all_confidence_diffs.extend(confidence_diffs)
             
@@ -394,6 +561,7 @@ if __name__ == "__main__":
         path = filedialog.askdirectory(title="Choose working directory containing 'explanations.json' and 'results.csv'.")
     btns.append(tk.Button(root, text="Reset Path", command=lambda:resetPath()))
     btns.append(tk.Button(root, text="Stats", command=lambda:calculate_statistics(path)))
+    btns.append(tk.Button(root, text="StatsSingular", command=lambda:display_for_query(path, int(samplesize_widget.get()))))
     btns.append(tk.Button(root, text="Correlation", command=lambda:test_correlation(path, int(samplesize_widget.get()))))
     btns.append(tk.Button(root, text="Consistency", command=lambda:test_consistency(path, int(samplesize_widget.get()))))
     btns.append(tk.Button(root, text="Accuracy", command=lambda:accuracy(path)))
