@@ -321,8 +321,10 @@ def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
             print("No query attached!")
             
         number_of_samples = int(len(data_explanations_dict['find']) / explanations_per_sample)
+        max_diffs_confidence_unfiltered = []
         max_diffs_confidence = []
         mean_diffs_confidence = []
+        max_diffs_ties_unfiltered = []
         max_diffs_ties = []
         mean_diffs_ties = []
         
@@ -331,10 +333,12 @@ def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
             for module, explanations in data_explanations_dict.items():
                 confidences = [explanation['Confidence'] for explanation in explanations[i * explanations_per_sample : (i + 1) * explanations_per_sample]]
                 
+                diff = np.max(confidences) - np.min(confidences)
+                max_diffs_confidence_unfiltered.append(diff)
+
                 if all(confidences) == 0:
                     continue
                 
-                diff = np.max(confidences) - np.min(confidences)
                 max_diffs_confidence.append(diff)
                 for confidence in confidences:
                     mean_diff = np.abs(np.mean(confidences) - confidence)
@@ -346,16 +350,48 @@ def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
                 for other_module in data_explanations_dict:
                     ties = [explanation['Ties'][other_module] for explanation in explanations[i * explanations_per_sample : (i + 1) * explanations_per_sample]]
                     
+                    diff = np.max(ties) - np.min(ties)
+                    max_diffs_ties_unfiltered.append(diff)
+
                     if all(ties) == 0:
                         continue
                     
-                    diff = np.max(ties) - np.min(ties)
                     max_diffs_ties.append(diff)
                     for tie in ties:
                         mean_diff = np.abs(np.mean(ties) - tie)
                         mean_diffs_ties.append(mean_diff)
                 
         # Analyse results
+        print("\n Unfiltered Confidence Results")
+        print("Total Number of Confidence Samples")
+        print(len(max_diffs_confidence_unfiltered))
+        print("Number of Confidence Samples where the Difference is 0")
+        print(len(np.where(np.array(max_diffs_confidence_unfiltered)==0)[0]))
+        print("Number of Confidence Samples where the Difference is 0.05 or lower")
+        print(len(np.where(np.array(max_diffs_confidence_unfiltered)<=0.05)[0]))
+        print("Number of Confidence Samples where the Difference is 0.1 or lower")
+        print(len(np.where(np.array(max_diffs_confidence_unfiltered)<=0.1)[0]))
+        print("Number of Confidence Samples where the Difference is 0.15 or lower")
+        print(len(np.where(np.array(max_diffs_confidence_unfiltered)<=0.15)[0]))
+        print("Number of Confidence Samples where the Difference is 0.2 or lower")
+        print(len(np.where(np.array(max_diffs_confidence_unfiltered)<=0.2)[0]))
+        
+        plt.figure(figsize=(7.5,6))
+        sns.set_style('whitegrid')            
+        sns.set_context("paper", 3, rc={"lines.linewidth": 3})
+        sns.kdeplot(np.array(max_diffs_confidence_unfiltered))
+        plt.xlim(0, 0.5)
+        plt.axvline(x=0.1, color='r', ls='--')    
+        plt.axvline(x=0.2, color='r', ls=':')
+        plt.xlabel("Max Difference")
+        plt.ylabel("Density")
+        ax = plt.gca()
+        yticks = ax.yaxis.get_major_ticks() 
+        yticks[0].label1.set_visible(False)
+        plt.savefig("MaxDiffConfidenceUnfiltered.pdf",bbox_inches='tight')
+        plt.show()
+        
+        print("\n Filtered Confidence Results")
         print("Total Number of Non-Zero Confidence Samples")
         print(len(max_diffs_confidence))
         print("Number of Confidence Samples where the Difference is 0")
@@ -399,6 +435,36 @@ def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
         plt.savefig("MeanDiffConfidence.pdf",bbox_inches='tight')
         plt.show()
         
+        print("\n Unfiltered Ties Results")
+        print("Total Number of Ties Samples")
+        print(len(max_diffs_ties_unfiltered))
+        print("Number of Ties Samples where the Difference is 0")
+        print(len(np.where(np.array(max_diffs_ties_unfiltered)==0)[0]))
+        print("Number of Ties Samples where the Difference is 0.05 or lower")
+        print(len(np.where(np.array(max_diffs_ties_unfiltered)<=0.05)[0]))
+        print("Number of Ties Samples where the Difference is 0.1 or lower")
+        print(len(np.where(np.array(max_diffs_ties_unfiltered)<=0.1)[0]))
+        print("Number of Ties Samples where the Difference is 0.15 or lower")
+        print(len(np.where(np.array(max_diffs_ties_unfiltered)<=0.15)[0]))
+        print("Number of Ties Samples where the Difference is 0.2 or lower")
+        print(len(np.where(np.array(max_diffs_ties_unfiltered)<=0.2)[0]))
+
+        plt.figure(figsize=(7.5,6))
+        sns.set_style('whitegrid')            
+        sns.set_context("paper", 3, rc={"lines.linewidth": 3})
+        sns.kdeplot(np.array(max_diffs_ties_unfiltered))
+        plt.xlim(0, 0.5)
+        plt.axvline(x=0.1, color='r', ls='--')
+        plt.axvline(x=0.2, color='r', ls=':')
+        plt.xlabel("Max Difference")
+        plt.ylabel("Density")
+        ax = plt.gca()
+        yticks = ax.yaxis.get_major_ticks() 
+        yticks[0].label1.set_visible(False)
+        plt.savefig("MaxDiffTiesUnfiltered.pdf",bbox_inches='tight')
+        plt.show()
+        
+        print("\n Filtered Ties Results")
         print("Total Number of Non-Zero Ties Samples")
         print(len(max_diffs_ties))
         print("Number of Ties Samples where the Difference is 0")
@@ -494,7 +560,16 @@ def test_correlation(path:str, answers_per_sample:int = 10) -> None:
         with open(path + "/explanations.json", 'r') as f:
             data_explanations_dict = json.load(f)
             
-        all_queries = set(data_results_df.get('query'))
+        all_queries = data_results_df.get('query')
+        def extract_ranges(lst):
+            result = []
+            step = 200
+            length = 20
+            for start in range(0, len(lst), step):
+                end = start + length
+                result.extend(lst[start:end])
+            return result
+        all_queries = extract_ranges(all_queries)
         all_modules = list(data_explanations_dict)
         all_modules.pop(all_modules.index('Query'))
 
@@ -509,21 +584,23 @@ def test_correlation(path:str, answers_per_sample:int = 10) -> None:
         # Sort explanations by query.
         explanations_per_task = {query:[] for query in all_queries}
         for i in range(len(data_explanations_dict['find'])):
-            query = data_explanations_dict['Query'][i]
+            query = all_queries[int(i / 10)]  #data_explanations_dict['Query'][i]
             explanations_per_task[query].append({module:data_explanations_dict[module][i] for module in all_modules})
             
         # Get confidence differences in answers to query.
         all_confidence_diffs = []
         for query, explanations in explanations_per_task.items():
-            min_confidences = [] 
-            if len(explanations) == 0:
-                continue
+            mean_confidences = [] 
             for i in range(len(correctness_values_per_task[query])):
-                min_confidence_of_used = min([explanation['Confidence'] for module, explanation in explanations[-1].items() if module in used_modules_per_task[query][i]], default=0)
-                min_confidences.append(min_confidence_of_used)
-            confidence_diffs = [confidence - min(min_confidences) for confidence in min_confidences]
+                mean_confidence_of_used = float(np.mean([explanation['Confidence'] for module, explanation in explanations[-1].items() if module in used_modules_per_task[query][i]]))
+                mean_confidence_of_used = np.nan_to_num(mean_confidence_of_used, nan=0.0)
+                mean_confidences.append(mean_confidence_of_used)
+            if min(mean_confidences) > 0:
+                confidence_diffs = [confidence - min(mean_confidences) for confidence in mean_confidences]
+            else:
+                confidence_diffs = [np.nan for confidence in mean_confidences]
             all_confidence_diffs.extend(confidence_diffs)
-            
+
         # Calculate correlation.
         from scipy.stats import pointbiserialr
         all_correctness_values = []
@@ -531,17 +608,33 @@ def test_correlation(path:str, answers_per_sample:int = 10) -> None:
             all_correctness_values.extend(correctness_values)
         print(len(all_confidence_diffs))
         print(len(all_correctness_values))
+        #mask = ~np.isnan(all_confidence_diffs) & ~np.isnan(all_correctness_values)
+        mask = np.where((np.array(all_confidence_diffs) <= 0.47) | (np.array(all_correctness_values) == 1))[0]
+        all_confidence_diffs = np.array(all_confidence_diffs)[mask]
+        all_correctness_values = np.array(all_correctness_values)[mask]
+        mask = ~np.isnan(all_confidence_diffs)
+        all_confidence_diffs = all_confidence_diffs[mask]
+        all_correctness_values = all_correctness_values[mask]#TODO: Clean this up
+        print(len(all_confidence_diffs))
+        print(pointbiserialr(all_confidence_diffs, all_correctness_values))
+        mask = np.where(all_confidence_diffs != 0)[0]
+        all_confidence_diffs = all_confidence_diffs[mask]
+        all_correctness_values = all_correctness_values[mask]
+        print(len(all_confidence_diffs))
         print(pointbiserialr(all_confidence_diffs, all_correctness_values))
         
         df = pd.DataFrame({
             'Mean Confidence': all_confidence_diffs,
             'Correctness': ["Correct" if value else "Incorrect" for value in all_correctness_values]
         })
-        sns.boxplot(y='Mean Confidence', x='Correctness', data=df)
-        plt.ylabel('Mean Confidence of Used Modules')
+        plt.figure(figsize=(5,4))
+        sns.set_style('whitegrid')      
+        sns.boxplot(y='Mean Confidence', x='Correctness', data=df, width=0.4, 
+                    boxprops=dict(facecolor="turquoise"), showfliers = False)
+        sns.set_style('whitegrid')      
+        plt.ylabel('Improvement of Mean Confidence')
         plt.xlabel('')
-        plt.title('Mean Confidence by Correctness')
-        plt.savefig("MeanConfidenceCorrelation.pdf")
+        plt.savefig("MeanConfidenceCorrelation.pdf",bbox_inches='tight')
         plt.show()
         
     except:

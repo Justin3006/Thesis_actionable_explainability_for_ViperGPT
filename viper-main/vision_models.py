@@ -1088,8 +1088,6 @@ class LlamaModel(BaseModel):
                 response = self.get_general(prompt)
         else:
             response = []  # All previously cached
-        print(1)
-        print(response)
         if config.use_cache:
             for p, r in zip(prompt, response):
                 # "call" forces the overwrite of the cache
@@ -1098,12 +1096,8 @@ class LlamaModel(BaseModel):
                 results[idx] = response[i]
         else:
             results = response
-        print(2)
-        print(results)
         if not self.to_batch and not type(results) is str:
             results = results[0]
-        print(3)
-        print(results)
         return results
 
     @classmethod
@@ -1213,7 +1207,7 @@ class CodexModel(BaseModel):
         result, original_token_length = self.forward_(extended_prompt, temperature=config.codex.temperature)
         if not isinstance(prompt, list):
             result = result[0]
-            origirnal_token_length = original_token_length[0]
+            original_token_length = original_token_length[0]
         
         ###############################################################
         ###              EXPLANATIONS
@@ -1237,7 +1231,8 @@ class CodexModel(BaseModel):
                     
                     # Repeat for full prompt.
                     for cycle in range(required_perturbation_cycles):
-                        code_0, token_length = self.forward_(extended_prompt, temperature=explainer_temperature)[0]
+                        code_0, token_length = self.forward_(extended_prompt, temperature=explainer_temperature)
+                        code_0 = code_0[0]
                         used_modules = explainer.identify_used_modules(code_0, all_modules)
                         metadata_collection[cycle][''] = explainer.gather_metadata(code_0, all_modules, used_modules)
                     
@@ -1258,22 +1253,24 @@ class CodexModel(BaseModel):
                                                replace('EXTRA_CONTEXT_HERE', extra_context)]
 
                         for cycle in range(required_perturbation_cycles):
-                            code_m, token_length = self.forward_(extended_prompt_alt, temperature=explainer_temperature)[0]
+                            code_m, token_length = self.forward_(extended_prompt_alt, temperature=explainer_temperature)
+                            code_m = code_m[0]
                             used_modules = explainer.identify_used_modules(code_m, all_modules)
                             metadata_collection[cycle][module] = explainer.gather_metadata(code_m, reduced_modules, used_modules)
                     
                     explanation = explainer.generate_explanation(metadata_collection)
-                    explainer.save_explanation(explanation, filename='', query=prompt[i])
+                    explainer.save_explanation(explanation, filename=config.explainer.filename, query=prompt[i])
                     recommendation = explainer.get_recommendation(explanation, recommendation_threshold, recommendation_threshold2, recommendation_mode)
                     
                     # Return improved code.
                     if len(recommendation) >= 1:
                         reduced_modules = all_modules.copy()
-
+                        reduced_prompt = base_prompt
+                        
                         for module in recommendation:
                             if module not in essential_modules:
                                 reduced_modules.remove(module)
-                                reduced_prompt = prompt_editing.remove_function_definition(base_prompt, module)
+                                reduced_prompt = prompt_editing.remove_function_definition(reduced_prompt, module)
                                 reduced_prompt = prompt_editing.remove_function_examples(reduced_prompt, module, 'execute_command')
                         
                         if isinstance(prompt, list):
@@ -1285,8 +1282,11 @@ class CodexModel(BaseModel):
                                                replace('INSERT_TYPE_HERE', input_type).
                                                replace('EXTRA_CONTEXT_HERE', extra_context)]
                         
-                        alt_result[i], alt_token_length[i] = self.forward_(extended_prompt)[0]
-        length_reduction = [alt_token_length[i] / original_token_length[i] for i in range(len(result))]
+                        alt_result[i], alt_token_length[i] = self.forward_(extended_prompt)
+                        alt_result[i] = alt_result[i][0]
+                        alt_token_length[i] = alt_token_length[i][0]
+                        
+        length_reduction = [1 - alt_token_length[i] / original_token_length[i] for i in range(len(result))]
         return result, alt_result, length_reduction
 
     def forward_(self, extended_prompt, temperature=0):
@@ -1382,6 +1382,7 @@ class CodeLlama(CodexModel):
         do_sample = temperature > 0
         set_seed(np.random.randint(0,100))
         input_ids = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)["input_ids"]
+        
         generated_ids = self.model.generate(input_ids.to("cuda"), max_new_tokens=256, temperature=temperature, do_sample=do_sample)
         generated_ids = generated_ids[:, input_ids.shape[-1]:]
         generated_text = [self.tokenizer.decode(gen_id, skip_special_tokens=True) for gen_id in generated_ids]
@@ -1391,7 +1392,11 @@ class CodeLlama(CodexModel):
                           replace("def execute_command(image):","    ").
                           replace("def execute_command(image)->str:","    ") 
                           for text in generated_text]
-        return generated_text, len(input_ids)
+        
+        pad_token_id = self.tokenizer.eos_token_id
+        non_padded_counts = (input_ids != pad_token_id).sum(dim=1)
+        
+        return generated_text, non_padded_counts
 
     def forward_(self, extended_prompt, temperature=0):
         if len(extended_prompt) > self.max_batch_size:
@@ -1400,7 +1405,7 @@ class CodeLlama(CodexModel):
             for i in range(0, len(extended_prompt), self.max_batch_size):
                 r = self.forward_(extended_prompt[i:i + self.max_batch_size], temperature)
                 response += r[0]
-                token_length += r[1]
+                token_length.extend(r[1])
             return response, token_length
         with torch.no_grad():
             response, token_length = self.run_codellama(extended_prompt, temperature)
