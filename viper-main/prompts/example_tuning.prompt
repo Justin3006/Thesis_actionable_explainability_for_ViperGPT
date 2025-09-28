@@ -301,6 +301,7 @@ def execute_command(image) -> str:
     object_name = object_patch.simple_query("What is the name of the object?")
     return object_patch.llm_query(f"What is the history behind {object_name}?", long_answer=True)
 
+# Return the qux that is closest to the foo
 def execute_command(image) -> ImagePatch:
     image_patch = ImagePatch(image)
     qux_patches = image_patch.find('qux')
