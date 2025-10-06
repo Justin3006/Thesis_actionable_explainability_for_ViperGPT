@@ -975,6 +975,18 @@ class LlamaModel(BaseModel):
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = 'left'
         
+        self.tokenizer.chat_template = (
+            "{% for message in messages %}"
+            "{% if message['role'] == 'system' %}"
+            "<<SYS>>\n{{ message['content'] }}\n<</SYS>>\n"
+            "{% elif message['role'] == 'user' %}"
+            "[INST] {{ message['content'] }} [/INST]"
+            "{% elif message['role'] == 'assistant' %}"
+            "{{ message['content'] }} "
+            "{% endif %}"
+            "{% endfor %}"
+        )
+
         # Compute this when the other models have already been loaded
         # Ignore gpu number
         usage_ratio = 0.15  # If it is small, it will use more GPUs, which will allow larger batch sizes
@@ -1026,7 +1038,7 @@ class LlamaModel(BaseModel):
                 # In case only one option is given as a guess
                 guess1 = [guess1[0], guess1[0]]
             prompts_total.append(prompt_base.format(question, guess1[0], guess1[1]))
-        llama_prompt = "### Instruction:\n{}\n\n### Response:\n".format(prompts_total[0])
+        llama_prompt = [{"role": "user", "content": prompts_total[0]}]
         print(llama_prompt)
         response = self.query_llama(llama_prompt)
         return response
@@ -1038,13 +1050,13 @@ class LlamaModel(BaseModel):
         for p in prompts:
             question = p
             prompts_total.append(prompt_base.format(question))
-        llama_prompt = "### Instruction:\n{}\n\n### Response:\n".format(prompts_total[0])
+        llama_prompt = [{"role": "user", "content": prompts_total[0]}]
         print(llama_prompt)
         response = self.query_llama(llama_prompt)
         return response
 
     def get_general(self, prompts) -> list[str]:
-        llama_prompt = "### Instruction:\n{}\n\n### Response:\n".format(prompts)
+        llama_prompt = [{"role": "user", "content": prompts}]
         print(llama_prompt)
         response = self.query_llama(llama_prompt)
         return response
