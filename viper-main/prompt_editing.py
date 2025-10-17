@@ -110,6 +110,12 @@ def remove_function_examples(code:str, function_name:str, execute_command:str) -
     
     # Go through code line by line.
     for ind, line in enumerate(lines):
+        original_line = line
+        
+        temp_ind = line.find(">>>")
+        if temp_ind != -1:
+            line = line[:temp_ind] + line[temp_ind+3:]
+
         # If in function, look for function_name and remove from updated code if found.
         if example_start_ind != -1:
             if line.find(f'.{function_name}(') != -1 or line.find(f' {function_name}(') != -1:
@@ -124,7 +130,7 @@ def remove_function_examples(code:str, function_name:str, execute_command:str) -
                 function_found = False
                 
         # Retain line in new code.
-        updated_lines.append(line)
+        updated_lines.append(original_line)
 
         # Mark beginning of new function, if necessary.
         if line.find(f'def {execute_command}') != -1:

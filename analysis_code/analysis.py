@@ -12,6 +12,7 @@ import tkinter as tk
 from tkinter import Label, filedialog
 import traceback
 from typing import List, Dict
+from itertools import combinations
 
 
 def identify_used_modules(code:str, modules:List[str]) -> Dict[str, int]:
@@ -54,7 +55,7 @@ def calculate_statistics(path:str) -> None:
         # Confidences
         mean_confidence_per_module = {}
         for module, explanations in data.items():
-            mean_confidence_per_module[module] = np.mean([explanation['Confidence'] for explanation in explanations if explanation['Confidence'] != 0 and explanation['Alternative Code'][0] != ''])
+            mean_confidence_per_module[module] = np.mean([explanation['Confidence'] for explanation in explanations])# if explanation['Confidence'] != 0 and explanation['Alternative Code'][0] != ''])
         print("Confidences: ")
         print(mean_confidence_per_module)
         
@@ -63,7 +64,7 @@ def calculate_statistics(path:str) -> None:
         for module, explanations in data.items():
             mean_ties = {}
             for other_module in explanations[0]['Ties']:
-                mean_ties[other_module] = np.mean([explanation['Ties'][other_module] for explanation in explanations if explanation['Ties'][other_module] != 0 and explanation['Alternative Code'][0] != ''])
+                mean_ties[other_module] = np.mean([explanation['Ties'][other_module] for explanation in explanations if explanation['Confidence'] != 0])# if explanation['Ties'][other_module] != 0 and explanation['Alternative Code'][0] != ''])
             mean_ties_per_module[module] = mean_ties
         print("Ties: ")
         print(mean_ties_per_module)
@@ -97,6 +98,7 @@ def calculate_statistics(path:str) -> None:
         plt.savefig("MeanTiesHeatmap.pdf")
         plt.show()
         
+        """
         for module, ties in mean_ties_per_module.items():
             df = pd.DataFrame([ties.values()])
             df.fillna(0, inplace=True)
@@ -110,6 +112,24 @@ def calculate_statistics(path:str) -> None:
             plt.yticks(rotation=0)
             plt.title(f"Ties from '{module}'")
             plt.savefig(f"MeanTiesHeatmap{module}.pdf")
+        plt.show()
+        """
+
+        # Plot ties as heatmap (Valdiation bool_to_yesno)
+        adapted_ties = {key: mean_ties_per_module[key] for key in ["bool_to_yesno", "verify_property", "exists"]}
+        df = pd.DataFrame.from_dict(adapted_ties, orient='index')
+        df.fillna(0, inplace=True)
+        df.sort_index(inplace=True)
+        df.sort_index(axis=1, inplace=True)
+        
+        plt.figure(figsize=(10, 6))
+        sns.set(font_scale=0.9)
+        sns.heatmap(df, annot=True, cmap="YlGnBu", fmt=".2f", square=True, cbar_kws={"shrink": 0.35})
+        plt.title("Ties from module A to module B", pad=10)
+        plt.ylabel("Module A", labelpad=10)
+        plt.xlabel("Module B", labelpad=10)
+        plt.tight_layout()
+        plt.savefig("ValidationMeanTiesHeatmap.pdf")
         plt.show()
     except:
         print("Some error occured.")
@@ -196,110 +216,6 @@ def display_for_query(path:str, i:int) -> None:
             plt.title(f"Ties from '{module}'")
             plt.savefig(f"SingleTiesHeatmap{module}.pdf")
             plt.show()
-    except:
-        print("Some error occured.")
-        traceback.print_exc()
-
-
-def calculate_correlation(path:str, inti) -> None:
-    """
-    OBSOLETE
-    Calculates correlation betweem accuracy and confidence. 
-    
-    :param path: Name of the dictionary containing the files to use.
-    """
-    try:
-        data_results_df = pd.read_csv(path + "/results.csv")
-        
-        with open(path + "/explanations.json", 'r') as f:
-            data_explanations_dict = json.load(f)
-        try:
-            data_explanations_dict.pop('Query')
-        except:
-            print("No query attached!")
-            
-        import dataset_helpers
-        correctness_values = []
-        invalid = []
-        for idx, data_point in data_results_df.iterrows():
-            #if "simple_query(query)" not in data_point["code"] and "ImagePatch" not in data_point["answer"] and "yes" not in data_point["answer"] and "no" not in data_point["answer"]:
-            #if "simple_query(query)" not in data_point["code"] and "ImagePatch" not in data_point["answer"] and ("yes" in data_point["answer"] or "no" in data_point["answer"]):
-            if "simple_query(query)" not in data_point["code"] and "ImagePatch" not in data_point["answer"]:
-                correctness_values.append(dataset_helpers.accuracy([data_point["result"]], [data_point["answer"]]))
-            else:
-                correctness_values.append(-1)
-                invalid.append(idx)
-
-        print(len(data_explanations_dict['find']))
-
-        mean_confidence_alt_per_result = []
-        min_confidence_alt_per_result = []
-        max_confidence_alt_per_result = []
-        mean_confidence_per_result = []
-        min_confidence_per_result = []
-        max_confidence_per_result = []
-        for i in range(len(data_explanations_dict['find'])):
-            if i in invalid:
-                continue
-            
-            if len([explanations[i]['Alternative Code'] for module, explanations in data_explanations_dict.items() if explanations[i]['Alternative Code'][0] != '']) > 1:
-                
-                confidences = [explanations[i]['Confidence'] for module, explanations in data_explanations_dict.items() if explanations[i]['Alternative Code'][0] != '']
-                mean_confidence = np.mean(confidences) if len(confidences) != 0 else 0
-                min_confidence = np.min(confidences) if len(confidences) != 0 else 0
-                max_confidence = np.max(confidences) if len(confidences) != 0 else 0
-               
-                mean_confidence_per_result.append(mean_confidence)
-                min_confidence_per_result.append(min_confidence)
-                max_confidence_per_result.append(max_confidence)
-                
-                
-                confidences_alt = [explanations[i]['Confidence'] for module, explanations in data_explanations_dict.items() if explanations[i]['Alternative Code'][0] == '']
-                mean_confidence_alt = np.mean(confidences_alt) if len(confidences_alt) != 0 else 0
-                min_confidence_alt = np.min(confidences_alt) if len(confidences_alt) != 0 else 0
-                max_confidence_alt = np.max(confidences_alt) if len(confidences_alt) != 0 else 0
-               
-                mean_confidence_alt_per_result.append(mean_confidence_alt)
-                min_confidence_alt_per_result.append(min_confidence_alt)
-                max_confidence_alt_per_result.append(max_confidence_alt)
-            else:
-                invalid.append(i)
-                
-        correctness_values = [correctness_values[i] for i in range(len(correctness_values)) if i not in invalid]
-
-        print(len(mean_confidence_per_result))
-
-        from scipy.stats import pointbiserialr
-        print(pointbiserialr(mean_confidence_per_result, correctness_values))
-        print(pointbiserialr(min_confidence_per_result, correctness_values))
-        print(pointbiserialr(max_confidence_per_result, correctness_values))
-        
-        df = pd.DataFrame({
-            'Mean Confidence': mean_confidence_per_result,
-            'Correctness': ["Correct" if value else "Incorrect" for value in correctness_values]
-        })
-        plt.figure(figsize=(5,4))
-        sns.set_style('whitegrid')      
-        sns.boxplot(y='Mean Confidence', x='Correctness', data=df, width=0.4, 
-                    boxprops=dict(facecolor="turquoise"))
-        sns.set_style('whitegrid')      
-        plt.ylabel('Mean Confidence of Used Modules')
-        plt.xlabel('')
-        plt.savefig("MeanConfidenceCorrelation.pdf",bbox_inches='tight')
-        plt.show()
-        
-        df = pd.DataFrame({
-            'Min Confidence': min_confidence_per_result,
-            'Correctness': ["Correct" if value else "Incorrect" for value in correctness_values]
-        })
-        plt.figure(figsize=(5,4))
-        sns.set_style('whitegrid')      
-        sns.boxplot(y='Min Confidence', x='Correctness', data=df, width=0.4, 
-                    boxprops=dict(facecolor="turquoise"))
-        plt.ylabel('Minimum Confidence of Used Modules')
-        plt.xlabel('')
-        plt.savefig("MinConfidenceCorrelation.pdf",bbox_inches='tight')
-        plt.show()
     except:
         print("Some error occured.")
         traceback.print_exc()
@@ -507,6 +423,24 @@ def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
         yticks[0].label1.set_visible(False)
         plt.savefig("MeanDiffConfidence.pdf",bbox_inches='tight')
         plt.show()
+
+        print("\n Average Jaccard Distance")
+        all_modules = list(data_explanations_dict)
+        jaccard_dists = []
+        for module, explanations in data_explanations_dict.items():
+            for explanation in explanations:
+                if explanation['Alternative Code'][0] == '':
+                    continue
+
+                used_modules = [set(identify_used_modules(alt_code, all_modules)) for alt_code in explanation['Alternative Code']]
+                for a, b in combinations(used_modules, 2):
+                    try:
+                        jaccard = 1 - len(a & b) / len(a | b)
+                        jaccard_dists.append(jaccard)
+                    except:
+                        continue
+        print(np.mean(jaccard_dists))
+        
     except:
         print("Some error occured.")
         traceback.print_exc()
@@ -527,18 +461,24 @@ def accuracy(path:str) -> None:
         accuracy = dataset_helpers.accuracy(results, answers)
         print("Original")
         print(accuracy)    
-        try:
-            alt_results = [data_point["alt_result"] for idx, data_point in data_results_df.iterrows()]
-            accuracy = dataset_helpers.accuracy(alt_results, answers)
-            print("Following recommendation")
-            print(accuracy)
-        except:
-            print("No alt results")
         
         default_answers = len([0 for idx, data_point in data_results_df.iterrows() if 'image_patch.simple_query(query)' in data_point["code"] or 
                                                                                         ".forward('glip'" in data_point["code"]])
         print("Non-executable Code")
         print(default_answers/len(answers))
+
+        try:
+            alt_results = [data_point["alt_result"] for idx, data_point in data_results_df.iterrows()]
+            accuracy = dataset_helpers.accuracy(alt_results, answers)
+            print("Following recommendation")
+            print(accuracy)
+            
+            default_answers = len([0 for idx, data_point in data_results_df.iterrows() if 'image_patch.simple_query(query)' in data_point["alt_code"] or 
+                                                                                        ".forward('glip'" in data_point["alt_code"]])
+            print("Non-executable Code")
+            print(default_answers/len(answers))
+        except:
+            print("No alt results")
         
     except:
         print("Some error occured.")
