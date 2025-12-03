@@ -219,7 +219,7 @@ def display_for_query(path:str, i:int) -> None:
     except:
         print("Some error occured.")
         traceback.print_exc()
-    
+
 
 def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
     """
@@ -440,7 +440,7 @@ def test_consistency(path:str, explanations_per_sample:int = 10) -> None:
                     except:
                         continue
         print(np.mean(jaccard_dists))
-        
+            
     except:
         print("Some error occured.")
         traceback.print_exc()

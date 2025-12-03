@@ -1400,10 +1400,17 @@ class CodeLlama(CodexModel):
         generated_text = [self.tokenizer.decode(gen_id, skip_special_tokens=True) for gen_id in generated_ids]
         start = "[CODE]"
         end = "[/CODE]"
-        generated_text = [text[text.find(start)+len(start):text.find(end)].
-                          replace("def execute_command(image):","    ").
-                          replace("def execute_command(image)->str:","    ") 
+        generated_text = [text[text.find(start)+len(start):text.find(end)]
                           for text in generated_text]
+        
+        start = "def execute_command"
+        end = "\n"
+        for i in range(len(generated_text)):
+            try:
+                text = generated_text[i]
+                generated_text[i] = text[text.find(end,text.index(start)) + len(end):]
+            except:
+                continue
         
         pad_token_id = self.tokenizer.eos_token_id
         non_padded_counts = (input_ids != pad_token_id).sum(dim=1)

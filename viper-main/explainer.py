@@ -29,12 +29,11 @@ def identify_used_modules(code:str, modules:List[str]) -> Dict[str, int]:
     return used_modules
 
 
-def get_module_confidences(metadata_collection:List[Dict[str, Dict]], ties:Dict[str, Dict]) -> Dict[str, float]:
+def get_module_confidences(metadata_collection:List[Dict[str, Dict]]) -> Dict[str, float]:
     """
     Calculates for each module, what percent of the time it is used in the different code versions.
     
     :param metadata_collection: Metadata per code version.
-    :param ties: Dict containing ties per module.
     :returns: Dictionary of confidence per module.
     """
     modules = metadata_collection[0]['']['Available Modules']
@@ -123,6 +122,7 @@ def get_recommendation(explanation:Dict[str, Any], threshold:float=0, threshold2
     :param explanation: Dictionary containing explanation for the code.
     :param threshold: Confidence threshold below which to cut modules.
     :param threshold2: Ties threshold above which to still keep modules.
+    :param mode: Mode by which the recommendations should be generated.
     :returns: Name of the module recommendet to cut.
     """
     recommendation = []
@@ -138,10 +138,10 @@ def get_recommendation(explanation:Dict[str, Any], threshold:float=0, threshold2
             above_threshold = [module for module in explanation if explanation[module]['Confidence'] > threshold]
             recommendation = [module for module in explanation if explanation[module]['Confidence'] <= threshold 
                               and len([1 for other in above_threshold if explanation[other]['Ties'][module] >= threshold2]) == 0]
-        case 'adaptive':
+        case 'adaptive': # Not tested.
             threshold = np.max([explanation[module]['Confidence'] for module in not_used])
             recommendation = [module for module in explanation if explanation[module]['Confidence'] < threshold]
-        case 'constrainedAdaptive':
+        case 'constrainedAdaptive': # Not tested.
             threshold = np.max([explanation[module]['Confidence'] for module in not_used])
             recommendation = [module for module in explanation if explanation[module]['Confidence'] < threshold 
                               and len([explanation[other]['Ties'][module] >= threshold2 for other in above_threshold]) == 0]
@@ -153,6 +153,8 @@ def save_explanation(explanation:Dict[str, Any], filename: str = 'explanations',
     Save explanation in a json file.
     
     :param explanation: Explanation to save.
+    :param filename: Name of the file to save to.
+    :param query: Query for which the explanation was generated.
     """
     results_dir = pathlib.Path(config['results_dir'])
     results_file = results_dir/filename
@@ -184,14 +186,16 @@ def save_explanation(explanation:Dict[str, Any], filename: str = 'explanations',
         json.dump(existing_data, f, indent=4)
 
 
-def get_code_with_explanations(query:str, target:str, least_perturbations:int=10, essential_modules:List[str]=[]) -> Tuple[str, Dict[str, Any]]:
+def get_code_with_explanations(query:str, mode:str, least_perturbations:int=10, essential_modules:List[str]=[], threshold:float=0, threshold2:float=0) -> Tuple[str, Dict[str, Any]]:
     """
     Code generation variant that also generates explanations for the code.
     
     :param query: What query to generate code for.
-    :param target: What you want to optimize for.
+    :param mode: What mode to use for optimization.
     :param least_perturbations: How many smaples to take.
     :param essential_modules: What modules can not be perturbed.
+    :param threshold: Confidence threshold for recommendations.
+    :param threshold2: Ties threshold for recommendations.
     :returns: Generated code, Dictionary containing explanation for the code, Module recommended to cut.
     """
     all_modules = []
@@ -222,5 +226,6 @@ def get_code_with_explanations(query:str, target:str, least_perturbations:int=10
             metadata_collection[cycle][module] = gather_metadata(code_m, reduced_modules, used_modules)
     
     explanation = generate_explanation(metadata_collection)
-    recommendation = get_recommendation(explanation, 0)
+    recommendation = get_recommendation(explanation, threshold, threshold2, mode)
     return code_0, explanation, recommendation
+
